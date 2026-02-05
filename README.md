@@ -47,7 +47,9 @@ The project will be structured into four main stages, each targeting a specific 
 which forms a sequential pipeline in which the output of each stage is used as the
 input to the next.
 
-1. **Generate network specifications & constraints:** Multiple two-dimensional
+### 1) Generate network specifications & constraints:
+
+Multiple two-dimensional
 network environments will be emulated by randomly generating scenario
 parameters and constraints. Each environment scenario will include all data
 required to perform positioning estimations. This includes generating the exact
@@ -55,51 +57,53 @@ required to perform positioning estimations. This includes generating the exact
 obstacles, material attenuation coefficients, noise, interference, signal strength
 measurements, etc.
 
-    - **Risk**: Failing to represent realistic network conditions or introducing bias
-by lacking enough variation in the generated data.
+- **Risk**: Failing to represent realistic network conditions or introducing bias by lacking enough variation in the generated data.
 
-    - **Mitigation**: Generating data that offers a representative snapshot of
+- **Mitigation**: Generating data that offers a representative snapshot of
 diverse network reception conditions, including varying levels of noise,
 interference, and propagation conditions, to ensure sufficient diversity
 and relevance [1].
 
 <br>
 
-2. **Calculate position estimations:** The generated network environments will be
+### 2) Calculate position estimations: 
+The generated network environments will be
 used to produce multiple position estimates. For each network scenario, the
 position of the same target device will be calculated using three indoor
 positioning methods: Received Signal Strength Indicators (RSSI), Time of
 Arrival (TOA), and Angle of Arrival (AOA).
 
-    - **Risk**: Emulated environments may oversimplify network conditions
+- **Risk**: Emulated environments may oversimplify network conditions
 affecting the performance of some positioning methods more than
 others.
-    - **Mitigation**: Attenuation, noise, and LOS/NLOS conditions will be
+- **Mitigation**: Attenuation, noise, and LOS/NLOS conditions will be
 incorporated to improve dataset realism [1].
 
 <br>
 
-3. **Construct a labelled dataset and train the ML model:** The results from the
+### 3) Construct a labelled dataset and train the ML model: 
+The results from the
 positioning estimation phase will be mapped back to their corresponding
 network environments to form a labelled training dataset. This dataset will be
 used to train the ML model to analyse patterns between the ground-truth device
 position, the different estimated positions, and the related environmental
 constraints for each network scenario.
 
-    - **Risk**: The dataset size may be insufficient to support a reliable machine learning
+- **Risk**: The dataset size may be insufficient to support a reliable machine learning
 learning performance, leading to high variance, overfitting, or inflated
 accuracy estimates [3].
-    - **Mitigation**: The dataset size will be incrementally increased until the model
+- **Mitigation**: The dataset size will be incrementally increased until the model
 performance stabilises, and regularisation techniques will be used to
 prevent overfitting [3].
 
 <br>
 
-4. **Evaluate the ML model**: The trained ML model will be assessed to determine
+### 4) Evaluate the ML model: 
+The trained ML model will be assessed to determine
 whether it outperforms individual conventional indoor positioning methods.
 
-    - **Risk**: The model may not achieve significant improvements.
-    - **Mitigation**: If this occurs, the model may instead be repurposed to assist
+- **Risk**: The model may not achieve significant improvements.
+- **Mitigation**: If this occurs, the model may instead be repurposed to assist
 conventional positioning methods by refining existing measurements or
 correcting systematic errors, rather than directly predicting the device
 positions [1].
