@@ -1,8 +1,35 @@
-#  RSSI
+#  Data generation 
+
+## Overall specifications & constraints
+
+The main purpose of this document is to define the specification and constraints for the data generation phase of a ***Machine Learning Device Positioning Prediction Model.***
+
+We are emulating ***2D indoor and outdoor environments*** with multiple devices operating within a ***5GHz frequency band***. To avoid bias, we will ensure that in the data generation phase both scenarios have an equal chance of being generated.
+  
+**Simplified data generation process:**
+
+1. Define the environment type (*indoor or outdoor*) based on a random selection process.
+
+2. Generate network characteristics given the environment type.
+
+3. Return the generated data in a structured format for positioning estimation calculations.
+
+
+##  Grid
+
+-  **Dimensionality:** The environment is modelled as a two-dimensional Cartesian coordinate space, with positions represented as $\text{(x,y)}$ coordinate pairs.
+
+-  **Restricted Domain and Range (x,y):** $[-10 < x < 10, -10 < y < 10]$ representing a indoor or outdoor environment (20m x 20m = 400 m²), such as a shopping mall, field, or warehouse.
+
+-  **Limited device generation:** We will constrain the amount of devices in the network to a manageable number (e.g., 15-30) to ensure the dataset is not too large for training while still providing sufficient coverage for accurate positioning.
+
+
+
+##  RSSI
 
   
 
-##  Path Loss Exponent (Environment-Specific)
+###  Path Loss Exponent (Environment-Specific)
 
   
 
@@ -40,7 +67,7 @@ In the data generation process, \( n \) is sampled once per scenario and remains
 
   
 
-##  Log-Distance Path Loss Model
+###  Log-Distance Path Loss Model
 
   
 
@@ -82,7 +109,7 @@ with wavelength $(\lambda = \frac{c}{f}$), where \( c \) is the speed of light a
 
   
 
-##  Log-Normal Shadowing (Gaussian Noise)
+###  Log-Normal Shadowing (Gaussian Noise)
 
   
 
@@ -136,7 +163,7 @@ The Gaussian noise term is applied independently to each wireless link, while $(
 
   
 
-###  Estimating $(n)$ and $( \sigma )$ from Received-Power Samples (MMSE + SSE)
+####  Estimating $(n)$ and $( \sigma )$ from Received-Power Samples (MMSE + SSE)
 
   
 
@@ -144,7 +171,7 @@ Assume we have $(k)$ received power measurements ${p_i}_{i=1}^{k}$ (in dBm) coll
 
   
 
-###  1) Log-distance received-power model (in dBm)
+####  1) Log-distance received-power model (in dBm)
 
   
 
@@ -157,7 +184,7 @@ $\hat{p}_i = p_{i}(d_0) - 10n\log_{10}\!\left(\frac{d_i}{d_0}\right)$
   
   
 
-###  2) Sum of Squared Errors (SSE)
+####  2) Sum of Squared Errors (SSE)
 
   
 
@@ -185,7 +212,7 @@ where:
 
   
 
-###  3) MMSE estimate of the path loss exponent $( \hat{n} )$
+####  3) MMSE estimate of the path loss exponent $( \hat{n} )$
 
   
 
@@ -210,7 +237,7 @@ Solving this equation yields $(\hat{n})$.
   
   
 
-###  Estimating $( \sigma )$ using the SSE (as in the worked example)
+####  Estimating $( \sigma )$ using the SSE (as in the worked example)
 
   
 
@@ -250,7 +277,7 @@ $X_\sigma  \sim  \mathcal{N}(0,\sigma^2)$
 
   
 
-##  Using $( \sigma )$ during data generation
+###  Using $( \sigma )$ during data generation
 
   
 
@@ -303,7 +330,7 @@ This preserves the intended design:
 
   
 
-##  Calculating Received Signal Strength Indicators (RSSI)
+###  Calculating Received Signal Strength Indicators (RSSI)
 
   
 
@@ -331,7 +358,7 @@ where:
 
   
 
-##  RSSI - Devices and Channels Representation
+###  RSSI - Devices and Channels Representation
 
   
 
@@ -419,9 +446,9 @@ Ground-truth geometry is used to compute distances and deterministic path loss, 
 
   
 
-###  Visual Example :
+####  Visual Example :
 
-####  Aligned with Log-Distance + Shadowing Model
+#####  Aligned with Log-Distance + Shadowing Model
 
   
 
