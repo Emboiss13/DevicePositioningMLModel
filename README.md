@@ -115,7 +115,7 @@ positions [1].
 preprint, arXiv:2401.02427, 2023. Available at:
 https://arxiv.org/abs/2401.02427 [accessed March 2023].
 2. Rathnayake, R.M.M.R., Maduranga, M.W.P., Tilwari, V. and Dissanayake,
-M.B. RSSI and machine learning-based indoor localization systems for smart
+M.B. RSSI and machine learning-based indoor localisation systems for smart
 cities. Eng, 4(2), pp. 1468–1494. Available at:
 https://doi.org/10.3390/eng4020085 [accessed March 2023].
 3. Rajput, D., Wang, W.J. and Chen, C.C. Evaluation of a decided sample size
@@ -129,5 +129,7 @@ March 2023].
 
 ---
 
-#### Authors
-Giuliana E, Victor Romero Cano, Juan Hernandez Vega & Arnold Chau
+#### Author:
+Giuliana E
+#### Supervisors:
+[Victor Romero Cano](https://profiles.cardiff.ac.uk/staff/romerocanov), [Juan Hernandez Vega](https://profiles.cardiff.ac.uk/staff/hernandezvegaj) & [Arnold Chau](https://www.researchgate.net/profile/Arnold-Chau)
