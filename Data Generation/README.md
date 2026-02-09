@@ -44,7 +44,7 @@ In the data generation process, \( n \) is sampled once per scenario and remains
 
 The large-scale average path loss between two devices separated by distance \( d \) is modelled using the [log-distance path loss model](https://en.wikipedia.org/wiki/Log-distance_path_loss_model?utm_source=chatgpt.com#cite_note-Ref_1-3):
 
-$PL(d) = PL(d_0) + 10 n \log_{10}\!\left(\frac{d}{d_0}\right)$
+$$PL(d) = PL(d_0) + 10 n \log_{10}\!\left(\frac{d}{d_0}\right)$$
 
 where:
 
@@ -94,9 +94,9 @@ Assume we have $(k)$ received power measurements ${p_i}_{i=1}^{k}$ (in dBm) coll
 
 #### 1) Log-distance received-power model (in dBm)
 
-The predicted received power at distance \(d_i\) is:
+The predicted received power at distance $\(d_i\)$ is:
 
-$\hat{p}_i = p_{i}(d_0) - 10n\log_{10}\!\left(\frac{d_i}{d_0}\right)$
+$$\hat{p}_i = p_{i}(d_0) - 10n\log_{10}\!\left(\frac{d_i}{d_0}\right)$$
 
 
 #### 2) Sum of Squared Errors (SSE)
@@ -440,14 +440,14 @@ Where:
 
 For a ULA with element spacing $d$ and signal wavelength $\lambda$, the [steering vector](https://www.sciencedirect.com/science/chapter/monograph/pii/B9780123743534000089) is defined as:
 
-$\mathbf{a}(\theta) =
+$$\mathbf{a}(\theta) =
 \begin{bmatrix}
 1 \\
 e^{-j \frac{2\pi d}{\lambda} \sin\theta} \\
 e^{-j \frac{4\pi d}{\lambda} \sin\theta} \\
 \vdots \\
 e^{-j \frac{2\pi (M-1) d}{\lambda} \sin\theta}
-\end{bmatrix}$
+\end{bmatrix}$$
 
 To avoid spatial aliasing, the antenna spacing is constrained by:
 
@@ -463,7 +463,7 @@ The **Multiple Signal Classification (MUSIC)** algorithm estimates DOA by exploi
 
 The sample covariance matrix is computed as:
 
-$\hat{\mathbf{R}}_{xx} = \frac{1}{N} \sum_{n=1}^{N} \mathbf{x}_n \mathbf{x}_n^H$
+$$\hat{\mathbf{R}}_{xx} = \frac{1}{N} \sum_{n=1}^{N} \mathbf{x}_n \mathbf{x}_n^H$$
 
 Eigen-decomposition separates the noise subspace $\mathbf{E}_n$, and the MUSIC pseudospectrum is defined as:
 
