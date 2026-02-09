@@ -98,14 +98,8 @@ The predicted received power at distance \(d_i\) is:
 
 $\hat{p}_i = p_{i}(d_0) - 10n\log_{10}\!\left(\frac{d_i}{d_0}\right)$
 
+
 #### 2) Sum of Squared Errors (SSE)
-
-Define the SSE cost function:
-
-$J(n)=\sum_{i=1}^{k}\left(p_i-\hat{p}_i\right)^2$
-
-
-### 2) Sum of Squared Errors (SSE)
 
 Define the SSE cost function:
 
