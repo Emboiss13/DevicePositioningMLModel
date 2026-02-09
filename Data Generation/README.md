@@ -317,7 +317,7 @@ Time Difference of Arrival (TDOA) measurements are formed by **differencing arri
 | Reference distance | $d_0 = \|P - A_0\|$ | Distance between the target and the reference anchor |
 | Ideal TDOA | $\Delta t_i = \frac{(d_i - d_0)}{c}$ | Noise-free time difference of arrival relative to reference anchor $A_0$ |
 | Timing noise / bias | $\epsilon_i$ | Random or systematic timing error added to emulate realistic measurements |
-| Noisy TDOA | $\Delta t_i^{\text{obs}} = \Delta t_i + \epsilon_i$ | Observed TDOA used for positioning and ML training |
+| Noisy TDOA | $\Delta t_i^{\text{obs}} = \Delta t_i + \epsilon_i$ | Observed TDOA used for positioning and ML training. Look at this [paper with Gaussian Noise formulas for TOA & TDOA](https://ieeexplore.ieee.org/abstract/document/6289832?casa_token=zlWSsBpX2tcAAAAA:YucfSf_AWlGLUOz4YIHGHmw9CLLbK4CIGXDip3KQ7ya6luTLnl8-pFdaU5nDrWw6ZJvTD74BBg) for more details.|
 
 <br>
 <br>
