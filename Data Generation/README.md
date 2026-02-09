@@ -73,16 +73,16 @@ $X_\sigma \sim \mathcal{N}(0, \sigma^2)$
 
 The parameter $( \sigma )$ represents the standard deviation of shadow fading (in dB) and is environment-dependent.
 
-Typical values used in this project:
+Typical values to potentially used in this project:
 
-| Environment | \( \sigma \) (dB) |
+| Environment | $( \sigma )$ (dB) |
 |------------|------------------|
 | Free space / open outdoor | 1 – 2 |
 | Indoor LOS | 2 – 4 |
 | Indoor NLOS | 4 – 8 |
 | Heavy obstruction | 6 – 10 |
 
-The Gaussian noise term is applied independently to each wireless link, while $( \sigma )$ remains fixed per scenario.
+The Gaussian noise term is applied independently to each wireless link, while $(\sigma)$ remains fixed per scenario.
 
 > **NOTE:** If we want to be more precise, we can estimate an exact value of $( \sigma )$ from measured (or emulated) received-power samples by fitting the log-distance model using **minimum mean square error (MMSE)** and then computing the **sum of squared errors (SSE)** as shown below.
 
