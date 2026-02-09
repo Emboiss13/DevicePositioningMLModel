@@ -1,6 +1,6 @@
 ## Data generation
 
-### Overall specifications & constraints
+#### Overall specifications & constraints
 
 The main purpose of this document is to define the specification and constraints for the data generation phase of a ***Machine Learning Device Positioning Prediction Model.***
 
