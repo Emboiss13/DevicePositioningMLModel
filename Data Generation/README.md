@@ -1,6 +1,6 @@
-#  Data generation 
+##  Data generation 
 
-## Overall specifications & constraints
+### Overall specifications & constraints
 
 The main purpose of this document is to define the specification and constraints for the data generation phase of a ***Machine Learning Device Positioning Prediction Model.***
 
@@ -15,7 +15,7 @@ We are emulating ***2D indoor and outdoor environments*** with multiple devices 
 3. Return the generated data in a structured format for positioning estimation calculations.
 
 
-##  Grid
+###  Grid
 
 -  **Dimensionality:** The environment is modelled as a two-dimensional Cartesian coordinate space, with positions represented as $\text{(x,y)}$ coordinate pairs.
 
