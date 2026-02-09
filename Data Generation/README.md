@@ -467,8 +467,8 @@ $\hat{\mathbf{R}}_{xx} = \frac{1}{N} \sum_{n=1}^{N} \mathbf{x}_n \mathbf{x}_n^H$
 
 Eigen-decomposition separates the noise subspace $\mathbf{E}_n$, and the MUSIC pseudospectrum is defined as:
 
-$P_{\text{MUSIC}}(\theta) =
-\frac{1}{\mathbf{a}^H(\theta)\, \mathbf{E}_n \mathbf{E}_n^H\, \mathbf{a}(\theta)}$
+$$P_{\text{MUSIC}}(\theta) =
+\frac{1}{\mathbf{a}^H(\theta)\, \mathbf{E}_n \mathbf{E}_n^H\, \mathbf{a}(\theta)}$$
 
 Peaks in $P_{\text{MUSIC}}(\theta)$ correspond to estimated DOA angles.
 
