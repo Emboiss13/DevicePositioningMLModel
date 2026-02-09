@@ -42,7 +42,7 @@ In the data generation process, \( n \) is sampled once per scenario and remains
 
 ### Log-Distance Path Loss Model
 
-The large-scale average path loss between two devices separated by distance \( d \) is modelled using the log-distance path loss model:
+The large-scale average path loss between two devices separated by distance \( d \) is modelled using the [log-distance path loss model](https://en.wikipedia.org/wiki/Log-distance_path_loss_model?utm_source=chatgpt.com#cite_note-Ref_1-3):
 
 $PL(d) = PL(d_0) + 10 n \log_{10}\!\left(\frac{d}{d_0}\right)$
 
