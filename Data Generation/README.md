@@ -19,7 +19,7 @@ We are emulating ***2D indoor and outdoor environments*** with multiple devices 
 - **Limited device generation:** We will constrain the amount of devices in the network to a manageable number (e.g., 15-30) to ensure the dataset is not too large for training while still providing sufficient coverage for accurate positioning.
 
 
-## RSSI Parameters & Equations
+## RSSI
 
 ### Path Loss Exponent (Environment-Specific)
 
@@ -35,6 +35,8 @@ In the data generation process, \( n \) is sampled once per scenario and remains
 | Indoor LOS | Open indoor areas (e.g. halls, warehouses) | 2.0 – 3.0 |
 | Indoor NLOS | Multiple walls, partitions | 3.0 – 6.0 |
 | Heavily Obstructed Indoor | Dense materials (concrete, metal) | 4.0 – 6.0 |
+
+>***Reference:*** *Table 4.2 [Srinivasan, S.; Haenggi, M.,](https://arxiv.org/pdf/0802.0351v1.pdf) [Path loss exponent estimation in large wireless networks](https://arxiv.org/pdf/0802.0351v1.pdf)[, Information Theory and Applications Workshop, pp. 139, Feb 2009.](https://arxiv.org/pdf/0802.0351v1.pdf)*
 
 <br>
 
@@ -136,7 +138,7 @@ Once $(\hat{n})$ is obtained, we can compute the SSE at the optimum:
 
 $J(\hat{n})=\sum_{i=1}^{k}\left(p_i-\hat{p}_i(\hat{n})\right)^2$
 
-Then estimate the (sample) shadowing variance using the same approach as the example at [Srinivasan, S.; Haenggi, M.,](https://arxiv.org/pdf/0802.0351v1.pdf) [Path loss exponent estimation in large wireless networks](https://arxiv.org/pdf/0802.0351v1.pdf)[, Information Theory and Applications Workshop, pp. 144, Feb 2009.](https://arxiv.org/pdf/0802.0351v1.pdf)
+Then estimate the (sample) shadowing variance using the same approach as the example at *[Srinivasan, S.; Haenggi, M.,](https://arxiv.org/pdf/0802.0351v1.pdf) [Path loss exponent estimation in large wireless networks](https://arxiv.org/pdf/0802.0351v1.pdf)[, Information Theory and Applications Workshop, pp. 144, Feb 2009.](https://arxiv.org/pdf/0802.0351v1.pdf)*
 
 $\sigma^2=\frac{J(\hat{n})}{k}$
 
@@ -235,7 +237,7 @@ Ground-truth geometry is used to compute distances and deterministic path loss, 
 
 ---
 
-### Visual Example 
+### Visual Example :
 #### Aligned with Log-Distance + Shadowing Model
 
 ```javascript
@@ -254,10 +256,10 @@ const network = {
     },
 
     otherDevices: {
-      A: { position: [-6.0, 4.5] },
-      B: { position: [8.0, 1.0] },
-      C: { position: [-2.0, -7.5] },
-      D: { position: [5.0, -6.0] }
+      A: { position: [-6.0, 4.5], isReference:  false },
+      B: { position: [8.0, 1.0], isReference:  false },
+      C: { position: [-2.0, -7.5], isReference:  false },
+      D: { position: [5.0, -6.0], isReference:  false }
     }
   },
 
@@ -283,14 +285,128 @@ const network = {
   }
 };
 ```
+<br>
+<br>
+<br>
 
 
+## Time Difference of Arrival (TDOA)
+
+TDOA measures the **difference in signal arrival times** between pairs of receivers and relates it to the **difference in propagation distances** divided by the signal propagation speed:
+
+$\Delta t_i = \frac{(d_i - d_0)}{c}$
+
+> **Difference between (target → A) and (target → B) distances gives TDOA**
+One device is designated as the **target transmitter**. All remaining devices act as **synchronised anchors** and measure the arrival time of the target’s transmission.  
+Time Difference of Arrival (TDOA) measurements are formed by **differencing arrival times at anchor pairs**.
 
 
+<br>
+
+### Position Estimation Parameters
+
+| Parameter | Symbol / Formula | Description |
+|----------|------------------|-------------|
+| Anchor positions | $(x_i, y_i)$ | Cartesian coordinates of receiver (anchor) devices with known locations |
+| Target position (ground truth) | $(x_T, y_T)$ | True Cartesian coordinates of the target device (used for data generation and evaluation) |
+| Signal propagation speed | $c = 3 \times 10^8\ \text{m/s}$ | Assumed constant RF propagation speed |
+| Number of anchors | $N \geq 2$ | Minimum of two anchors required to form a TDOA measurement |
+| Target point | $P$ | Geometric point representing the target device location |
+| Anchor points | $A_0, A_1, \ldots, A_N$ | Set of anchor device locations |
+| Target–anchor distance | $d_i = \|P - A_i\|$ | Euclidean distance between target and anchor $A_i$ |
+| Reference distance | $d_0 = \|P - A_0\|$ | Distance between the target and the reference anchor |
+| Ideal TDOA | $\Delta t_i = \frac{(d_i - d_0)}{c}$ | Noise-free time difference of arrival relative to reference anchor $A_0$ |
+| Timing noise / bias | $\epsilon_i$ | Random or systematic timing error added to emulate realistic measurements |
+| Noisy TDOA | $\Delta t_i^{\text{obs}} = \Delta t_i + \epsilon_i$ | Observed TDOA used for positioning and ML training |
+
+<br>
+<br>
+<br>
 
 
+### Conceptual Example
+
+#### Roles
+
+- **T** → Target device (transmitter, unknown position)
+- **A, B, C, …** → Anchors / reference devices (receivers, known positions, synchronised clocks)
+
+---
+
+#### Calculations
+
+1. **T transmits** a signal once  
+2. **A, B, C** receive the *same* transmission  
+3. Each anchor records an arrival time:
+   - Using $\Delta t_i = \frac{(d_i - d_0)}{c}$
+   - Arrival times: $t_A, t_B, t_C$
+4. Select a reference anchor **A**
+5. Form TDOA measurements by differencing arrival times
 
 
+- **TDOA(B − A):** $t_B - t_A$  
+- **TDOA(C − A):** $t_C - t_A$  
 
+<br>
 
+### Visual Example:
 
+```javascript
+const network = {
+  environment: {
+    type: "indoor",
+    propagationSpeed: 3e8,        // c (m/s)
+    timingNoiseStdDev: 0.2        // σ_t in ns (scenario-level)
+  },
+
+  devices: {
+    targetDevice: {
+      id: "T",
+      position: [3.5, -2.0]       // Unknown during inference
+    },
+
+    //anchors
+    otherDevices: { 
+      A: { position: [-6.0, 4.5], isReference: true },
+      B: { position: [8.0, 1.0], isReference:  false},
+      C: { position: [-2.0, -7.5], isReference:  false }
+    }
+  },
+
+  channels: {
+    "T-A": {
+      distance: 11.2,             // meters
+      arrivalTime: 37.33,         // ns (d / c + noise)
+      timingNoise: -0.05          // ns
+    },
+
+    "T-B": {
+      distance: 6.8,
+      arrivalTime: 22.69,
+      timingNoise: 0.12
+    },
+
+    "T-C": {
+      distance: 5.9,
+      arrivalTime: 19.79,
+      timingNoise: 0.08
+    }
+  },
+
+  tdoaMeasurements: {
+    referenceAnchor: "A",
+
+    "B-A": {
+      deltaDistance: -4.4,        // d_B - d_A (meters)
+      tdoa: -14.64,               // t_B - t_A (ns)
+      noisyTdoa: -14.47           // with timing noise
+    },
+
+    "C-A": {
+      deltaDistance: -5.3,
+      tdoa: -17.54,
+      noisyTdoa: -17.41
+    }
+  }
+};
+```
