@@ -515,13 +515,7 @@ These parameters align directly with those required by MATLAB’s `phased.MUSICE
 4. MUSIC estimates the dominant DOA $\theta$
 5. Each DOA forms a **ray** originating from the anchor:
 
-$\mathbf{p}(t) =
-\mathbf{a}_i +
-t
-\begin{bmatrix}
-\cos\theta_i \\
-\sin\theta_i
-\end{bmatrix}$
+$\mathbf{p}(t) = \mathbf{a}_i + t \begin{bmatrix} \cos\theta_i \\ \sin\theta_i \end{bmatrix}$
 
 6. Target position is estimated by intersecting rays from multiple anchors or fusing with RSSI / TOA estimates
 
