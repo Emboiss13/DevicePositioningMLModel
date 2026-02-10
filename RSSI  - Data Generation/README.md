@@ -36,6 +36,8 @@ The path loss exponent $n$ characterises the average rate at which signal power 
 
 In the data generation process, $n$ is sampled once per scenario and remains fixed for all links within that scenario to preserve spatial consistency.
 
+We will only use outdoor, Indoor LOS and Indoor NLOS environment types. 
+
 **Assumed values used in this project:**
 
 | Environment Type | Description | Path Loss Exponent $n$ |
