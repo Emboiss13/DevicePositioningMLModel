@@ -20,11 +20,12 @@ We are emulating ***2D indoor and outdoor environments*** with multiple devices 
   The environment is modelled as a two-dimensional Cartesian coordinate space, with positions represented as $(x, y)$ coordinate pairs.
 
 - **Restricted domain and range $(x, y)$:**  
-  $-10 < x < 10,\ -10 < y < 10$  
-  representing an indoor or outdoor environment (**20 m × 20 m = 400 m²**), such as a shopping mall, field, or warehouse.
+  $-30 < x < 30,\ -30 < y < 30$  
+  representing an indoor or outdoor environment (**60 m × 60 m = 3600 m²**), such as a shopping mall, field, or warehouse.
 
 - **Limited device generation:**  
-  The number of devices in the network is constrained to a manageable range (e.g. **15–30**) to ensure the dataset remains tractable for training while still providing sufficient geometric coverage for accurate positioning.
+  The number of devices/endpoints in the network is constrained to a manageable range (e.g. **15–30**) to ensure the dataset remains tractable for training while still providing sufficient geometric coverage for accurate positioning.
+  The number of antennas will be 5-10.
 
 <br>
 
