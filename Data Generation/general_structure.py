@@ -5,30 +5,26 @@ import math
 from typing import Any, Dict, List, Tuple, Optional, TypeVar, Type
 import random
 
-# ------------------------------------------------------------------------------
-#  TOTAL OCCUPIED AREA CONSTRAINTS
-# ------------------------------------------------------------------------------
+"""
+------------------------------------------------------------------------------
+TOTAL OCCUPIED AREA CONSTRAINTS
+------------------------------------------------------------------------------
 
-# DEVICES = 15%
+DEVICES
+ - Max 15% of the area can be occupied by devices
+ - We need the antennas to fill the space to ensure connectivity, but they also need to be spaced out to create a realistic scenario
 
-# 1 device (constraint)
-# - Max 15% of the area can be occupied by devices
-# - We need the antennas to fill the space to ensure connectivity, but they also need to be spaced out to create a realistic scenario
+OBSTACLES
+ - OUTDOOR: Max 20% (free-space = 80% - 15% devices = 65%)
+ - INDOOR LOS: Max 30-40% (free-space = 70-60% - 15% devices = 55-45%)
+ - INDOOR NLOS: Max 50-60% (free-space = 50-40% - 15% devices = 35-25%)
 
-# OBSTACLES
-# - OUTDOOR: Max 20% (free-space = 80% - 15% devices = 65%)
-# - INDOOR LOS: Max 30-40% (free-space = 70-60% - 15% devices = 55-45%)
-# - INDOOR NLOS: Max 50-60% (free-space = 50-40% - 15% devices = 35-25%)
-
-# We basically need to check the available obstacle space before creating a new obstacle and substract the area of the new obstacle from the available space after creating it.
-
+"""
 
 # ------------------------------------------------------------------------------
 #  TYPES
 # ------------------------------------------------------------------------------
 
-# INDOOR_LOS = minimum of 1 completely free channel
-# INDOOR_NLOS = not allowed to have any free channels (all must have at least 1 obstacle)
 class EnvironmentType(str, Enum):
     INDOOR_LOS = "indoor_LOS"
     INDOOR_NLOS = "indoor_NLOS"
@@ -59,13 +55,6 @@ def random_point(x_domain: Tuple[float, float], y_range: Tuple[float, float]) ->
     y0, y1 = y_range
     return (random.uniform(x0, x1), random.uniform(y0, y1))
 
-# Will use area instead of count to ensure we don't exceed the max occupancy percentage; also ensures devices are spaced out by at least the min separation distance
-"""def max_amount_given_separation(area_in_m2: float, occupancy_percentage: float, min_separation_in_m: float) -> int:
-    # Approximate each device as a disk with radius = min_separation_in_m/2
-    area_per_device = math.pi * (min_separation_in_m / 2) ** 2
-    usable_area = area_in_m2 * occupancy_percentage
-    return max(1, int(usable_area / area_per_device))"""
-
 def check_available_space(available_space: float, new_obstacle_area: float) -> bool:
     return new_obstacle_area <= available_space
 
@@ -78,11 +67,6 @@ def clamp(v: float, lo: float, hi: float) -> float:
 # ------------------------------------------------------------------------------
 # 🌳 ENVIRONMENT 🌳
 # ------------------------------------------------------------------------------
-
-# Range and Domain Min/Max
-# Outdoor = 60–80 m          --> 80m x 80m = 6400 m^2
-# Indoor LOS: 20–70 m        --> 20m x 20m = 400 m^2, 70m x 70m = 4900 m^2
-# Indoor NLOS: 10–50 m       --> 10m x 10m = 100 m^2, 50m x 50m = 2500 m^2
 
 # Grid size bounds (meters)
 def random_grid_size(bounds_min: float, bounds_max: float) -> Tuple[float, float]:
@@ -131,6 +115,13 @@ class Device:
     position: Tuple[float, float]
 
 class DeviceFactory:
+    """
+    Builds Obstacles for a scenario considering the following range and domain constraints:
+
+    - Outdoor = 60–80 m          --> 80m x 80m = 6400 m^2
+    - Indoor LOS: 20–70 m        --> 20m x 20m = 400 m^2, 70m x 70m = 4900 m^2
+    - Indoor NLOS: 10–50 m       --> 10m x 10m = 100 m^2, 50m x 50m = 2500 m^2
+    """
     def __init__(self, env: Environment) -> None:
 
         self.allowed_device_area = env.grid_area * 0.15 # 15% of the area can be occupied by
@@ -166,10 +157,6 @@ class DeviceFactory:
 # 🧱 OBSTACLES 🪴
 # ------------------------------------------------------------------------------
 
-# OBSTACLES
-# - OUTDOOR: Max 20% (free-space = 80% - 15% devices = 65%)
-# - INDOOR LOS: Max 30-40% (free-space = 70-60% - 15% devices = 55-45%)
-# - INDOOR NLOS: Max 50-60% (free-space = 50-40% - 15% devices = 35-25%)
 def allowed_obstacle_area(env_type: EnvironmentType) -> float:
     # return FRACTION of grid area
     if env_type == EnvironmentType.OUTDOOR:
@@ -202,6 +189,13 @@ class Obstacle:
 
 
 class ObstacleFactory:
+    """
+    Builds Obstacles for a scenario considering the following constraints: 
+
+    - OUTDOOR: Max space occupied by obstacles 20% (free-space = 80% - 15% devices = 65%)
+    - INDOOR_LOS: Max space occupied by obstacles 30-40% (free-space = 70-60% - 15% devices = 55-45%)
+    - INDOOR_NLOS: Max space occupied by obstacles 50-60% (free-space = 50-40% - 15% devices = 35-25%)
+    """
     def __init__(self, env: Environment) -> None:
         self.env = env
         self.obstacle_counter = 0
@@ -441,6 +435,10 @@ class Channel:
 class ChannelFactory:
     """
     Builds channels for a scenario.
+
+    NOTE:
+    - INDOOR_LOS = minimum of 1 completely free channel
+    - INDOOR_NLOS = not allowed to have any free channels (all must have at least 1 obstacle)
     """
     def __init__(
         self,
@@ -487,7 +485,27 @@ class ChannelFactory:
         return [self._make_channel(a, b) for a, b in pairs]
     
 
+def channels_meet_env_constraints(env_type: EnvironmentType, channels: List[Channel]) -> bool:
+    """
+    Enforce per-environment LOS/NLOS rules:
+    - INDOOR_LOS: at least one channel must have 0 blocking obstacles (completely free).
+    - INDOOR_NLOS: no channel may be completely free (each must have >=1 blocker).
+    - OUTDOOR: no constraint.
+    """
+    if not channels:
+        return True  # nothing to validate
 
+    if env_type == EnvironmentType.INDOOR_LOS:
+        return any(ch.blocking_obstacles == 0 for ch in channels)
+
+    if env_type == EnvironmentType.INDOOR_NLOS:
+        return all(ch.blocking_obstacles >= 1 for ch in channels)
+
+    return True  # OUTDOOR or future envs
+
+
+"""
+A seed was included for the cases where I want to corroborate that the calculations are """
 
 @dataclass
 class NetworkScenario:
@@ -505,9 +523,8 @@ class NetworkScenario:
         label: str = "random_scenario",
         seed: Optional[int] = None,
         min_devices: int = 4,
-        min_obstacles: int = 2,
         connect_channels: bool = True,
-        max_obstacle_attempts: int = 200,
+        max_channel_regen_attempts: int = 10,
     ) -> "NetworkScenario":
         """
         Creates a randomized scenario:
@@ -522,7 +539,7 @@ class NetworkScenario:
         env = Environment()
 
         # ---- Devices
-        df = DeviceFactory(env)
+        device_factory = DeviceFactory(env)
         devices: List[Device] = []
 
         # Random target count without relying on df.device_max
@@ -530,22 +547,22 @@ class NetworkScenario:
 
         while len(devices) < desired_devices:
             try:
-                d = df.create_device()
+                d = device_factory.create_device()
             except Exception:
                 break  # factory can't place more devices
 
             devices.append(d)
 
         # ---- Obstacles
-        of = ObstacleFactory(env)
+        obstacle_factory = ObstacleFactory(env)
         obstacles: List[Obstacle] = []
         failed_draws = 0
         max_failed_draws = 50  # safety only
 
-        while of.can_fit_any_obstacle():
+        while obstacle_factory.can_fit_any_obstacle():
             try:
-                ob = of.create_obstacle()
-                obstacles.append(ob)
+                obstacle = obstacle_factory.create_obstacle()
+                obstacles.append(obstacle)
                 failed_draws = 0  # reset after success
             except RuntimeError:
                 failed_draws += 1
@@ -559,8 +576,29 @@ class NetworkScenario:
         # ---- Channels
         channels: List[Channel] = []
         if connect_channels and len(devices) >= 2:
-            cf = ChannelFactory(env, obstacles)
-            channels = cf.build_channels(devices)
+            channel_factory = ChannelFactory(env, obstacles)
+            channels = channel_factory.build_channels(devices)
+
+            # Regenerate obstacles (and thus channels) if LOS/NLOS constraints are not met
+            attempts = 0
+            while not channels_meet_env_constraints(env.env_type, channels):
+                attempts += 1
+                if attempts >= max_channel_regen_attempts:
+                    break
+
+                # recreate obstacles and channels
+                obstacle_factory = ObstacleFactory(env)
+                obstacles = []
+                while obstacle_factory.can_fit_any_obstacle():
+                    try:
+                        obstacle = obstacle_factory.create_obstacle()
+                        obstacles.append(obstacle)
+                    except RuntimeError:
+                        break
+
+                channel_factory = ChannelFactory(env, obstacles)
+                channels = channel_factory.build_channels(devices)
+
 
         return cls(
             label=label,
@@ -573,24 +611,24 @@ class NetworkScenario:
 
     def to_dict(self) -> Dict[str, Any]:
         """
-        JSON-friendly serialization (enums -> values).
+        JSON-style formatting for generated data.
         """
         env = asdict(self.environment)
         env["env_type"] = self.environment.env_type.value
 
         devices = []
-        for d in self.devices:
-            dd = asdict(d)
-            dd["device_type"] = d.device_type.value
-            devices.append(dd)
+        for device in self.devices:
+            device_dict = asdict(device)
+            device_dict["device_type"] = device.device_type.value
+            devices.append(device_dict)
 
         obstacles = []
-        for o in self.obstacles:
-            od = asdict(o)
-            od["obstacle_type"] = o.obstacle_type.value
-            obstacles.append(od)
+        for obstacle in self.obstacles:
+            obstacle_dict = asdict(obstacle)
+            obstacle_dict["obstacle_type"] = obstacle.obstacle_type.value
+            obstacles.append(obstacle_dict)
 
-        channels = [asdict(c) for c in self.channels]
+        channels = [asdict(channel) for channel in self.channels]
 
         return {
             "label": self.label,
@@ -600,16 +638,3 @@ class NetworkScenario:
             "obstacles": obstacles,
             "channels": channels,
         }
-
-
-
-# ------------------------------------------------------------------------------
-#  QUICK MANUAL TEST
-# ------------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    s = NetworkScenario.generate_random(seed=21)
-    d = s.to_dict()
-    print("env:", d["environment"]["env_type"], "area:", round(d["environment"]["grid_area"], 2))
-    print("devices:", len(d["devices"]), "obstacles:", len(d["obstacles"]), "channels:", len(d["channels"]))
-    print("target_selected:", d["target_selected"])
