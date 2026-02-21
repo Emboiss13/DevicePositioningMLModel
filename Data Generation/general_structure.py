@@ -15,9 +15,9 @@ DEVICES
  - We need the antennas to fill the space to ensure connectivity, but they also need to be spaced out to create a realistic scenario
 
 OBSTACLES
- - OUTDOOR: Max 20% (free-space = 80% - 15% devices = 65%)
- - INDOOR LOS: Max 30-40% (free-space = 70-60% - 15% devices = 55-45%)
- - INDOOR NLOS: Max 50-60% (free-space = 50-40% - 15% devices = 35-25%)
+ - OUTDOOR: Max 10%
+ - INDOOR LOS: Max 20%
+ - INDOOR NLOS: Max 30%
 
 """
 
@@ -208,9 +208,9 @@ class ObstacleFactory:
     """
     Builds Obstacles for a scenario considering the following constraints: 
 
-    - OUTDOOR: Max space occupied by obstacles 10% (free-space = 80% - 15% devices = 65%)
-    - INDOOR_LOS: Max space occupied by obstacles 20% (free-space = 70-60% - 15% devices = 55-45%)
-    - INDOOR_NLOS: Max space occupied by obstacles 30% (free-space = 50-40% - 15% devices = 35-25%)
+    - OUTDOOR: Max space occupied by obstacles 10% (free-space = 90% - 15% devices = 75%)
+    - INDOOR_LOS: Max space occupied by obstacles 20% (free-space = 80% - 15% devices = 65%)
+    - INDOOR_NLOS: Max space occupied by obstacles 30% (free-space = 70% - 15% devices = 55%)
     """
     def __init__(self, env: Environment) -> None:
         self.env = env
