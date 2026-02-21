@@ -55,6 +55,21 @@ def random_point(x_domain: Tuple[float, float], y_range: Tuple[float, float]) ->
     y0, y1 = y_range
     return (random.uniform(x0, x1), random.uniform(y0, y1))
 
+# Generate a random point ensuring the shape of size (dx, dy) fully fits the bounds
+def random_point_for_rect(x_domain: Tuple[float, float], y_range: Tuple[float, float], dx: float, dy: float) -> Tuple[float, float]:
+    x0, x1 = x_domain
+    y0, y1 = y_range
+    if dx > (x1 - x0) or dy > (y1 - y0):
+        raise ValueError("Rectangle does not fit within the provided domain")
+    return (random.uniform(x0, x1 - dx), random.uniform(y0, y1 - dy))
+
+def random_point_for_circle(x_domain: Tuple[float, float], y_range: Tuple[float, float], radius: float) -> Tuple[float, float]:
+    x0, x1 = x_domain
+    y0, y1 = y_range
+    if (radius * 2) > (x1 - x0) or (radius * 2) > (y1 - y0):
+        raise ValueError("Circle does not fit within the provided domain")
+    return (random.uniform(x0 + radius, x1 - radius), random.uniform(y0 + radius, y1 - radius))
+
 def check_available_space(available_space: float, new_obstacle_area: float) -> bool:
     return new_obstacle_area <= available_space
 
@@ -160,11 +175,12 @@ class DeviceFactory:
 def allowed_obstacle_area(env_type: EnvironmentType) -> float:
     # return FRACTION of grid area
     if env_type == EnvironmentType.OUTDOOR:
-        return 0.20
+        # Sample a lighter density each run to vary clutter (0–20% of grid)
+        return random.uniform(0.0, 0.10)
     if env_type == EnvironmentType.INDOOR_LOS:
-        return random.uniform(0.30, 0.40)
+        return random.uniform(0.10, 0.20)
     if env_type == EnvironmentType.INDOOR_NLOS:
-        return random.uniform(0.50, 0.60)
+        return random.uniform(0.20, 0.30)
     raise ValueError(f"Unknown environment type: {env_type}")
     
 # Check max area hasn't been reached
@@ -192,9 +208,9 @@ class ObstacleFactory:
     """
     Builds Obstacles for a scenario considering the following constraints: 
 
-    - OUTDOOR: Max space occupied by obstacles 20% (free-space = 80% - 15% devices = 65%)
-    - INDOOR_LOS: Max space occupied by obstacles 30-40% (free-space = 70-60% - 15% devices = 55-45%)
-    - INDOOR_NLOS: Max space occupied by obstacles 50-60% (free-space = 50-40% - 15% devices = 35-25%)
+    - OUTDOOR: Max space occupied by obstacles 10% (free-space = 80% - 15% devices = 65%)
+    - INDOOR_LOS: Max space occupied by obstacles 20% (free-space = 70-60% - 15% devices = 55-45%)
+    - INDOOR_NLOS: Max space occupied by obstacles 30% (free-space = 50-40% - 15% devices = 35-25%)
     """
     def __init__(self, env: Environment) -> None:
         self.env = env
@@ -204,6 +220,7 @@ class ObstacleFactory:
         self.currently_occupied_obstacle_area = 0.0
         self.x_domain = env.x_domain
         self.y_range = env.y_range
+        self._placed: List[Obstacle] = []
 
     def _remaining_area(self) -> float:
         return self.allowed_obstacle_area - self.currently_occupied_obstacle_area
@@ -240,6 +257,75 @@ class ObstacleFactory:
     def can_fit_any_obstacle(self) -> bool:
         return self._remaining_area() >= self._global_min_possible_area()
 
+    # --- overlap helpers ---
+    def _rect_bounds_from_points(self, p0: Tuple[float, float], p1: Tuple[float, float]) -> Tuple[float, float, float, float]:
+        x0, y0 = p0
+        x1, y1 = p1
+        minx, maxx = (x0, x1) if x0 <= x1 else (x1, x0)
+        miny, maxy = (y0, y1) if y0 <= y1 else (y1, y0)
+        return minx, maxx, miny, maxy
+
+    def _rect_overlaps_rect(
+        self,
+        r1: Tuple[float, float, float, float],
+        r2: Tuple[float, float, float, float],
+    ) -> bool:
+        minx1, maxx1, miny1, maxy1 = r1
+        minx2, maxx2, miny2, maxy2 = r2
+        return not (maxx1 <= minx2 or maxx2 <= minx1 or maxy1 <= miny2 or maxy2 <= miny1)
+
+    def _circle_overlaps_circle(
+        self,
+        c1: Tuple[float, float],
+        r1: float,
+        c2: Tuple[float, float],
+        r2: float,
+    ) -> bool:
+        dx = c1[0] - c2[0]
+        dy = c1[1] - c2[1]
+        return dx * dx + dy * dy <= (r1 + r2) ** 2
+
+    def _circle_overlaps_rect(
+        self,
+        center: Tuple[float, float],
+        radius: float,
+        rect: Tuple[float, float, float, float],
+    ) -> bool:
+        minx, maxx, miny, maxy = rect
+        cx, cy = center
+        # closest point in the rectangle to the circle center
+        closest_x = clamp(cx, minx, maxx)
+        closest_y = clamp(cy, miny, maxy)
+        dx = cx - closest_x
+        dy = cy - closest_y
+        return dx * dx + dy * dy <= radius * radius
+
+    def _overlaps_existing(self, candidate: Obstacle) -> bool:
+        for ob in self._placed:
+            # both circles
+            if candidate.radius is not None and ob.radius is not None:
+                if self._circle_overlaps_circle(candidate.position_X_Y, candidate.radius, ob.position_X_Y, ob.radius):
+                    return True
+            # both rects
+            elif candidate.position_X1_Y1 and ob.position_X1_Y1:
+                rect1 = self._rect_bounds_from_points(candidate.position_X_Y, candidate.position_X1_Y1)
+                rect2 = self._rect_bounds_from_points(ob.position_X_Y, ob.position_X1_Y1)
+                if self._rect_overlaps_rect(rect1, rect2):
+                    return True
+            # circle vs rect
+            else:
+                circ = candidate if candidate.radius is not None else ob
+                rect_ob = ob if candidate.radius is not None else candidate
+                rect_bounds = self._rect_bounds_from_points(rect_ob.position_X_Y, rect_ob.position_X1_Y1)  # type: ignore[arg-type]
+                if self._circle_overlaps_rect(circ.position_X_Y, circ.radius, rect_bounds):  # type: ignore[arg-type]
+                    return True
+        return False
+
+    def _record(self, obstacle: Obstacle) -> Obstacle:
+        self._placed.append(obstacle)
+        self.currently_occupied_obstacle_area += obstacle.area
+        return obstacle
+
     def create_obstacle(self) -> Obstacle:
         if not self.can_fit_any_obstacle():
             raise RuntimeError("No obstacle can fit in the remaining allowed area.")
@@ -249,82 +335,89 @@ class ObstacleFactory:
         random.shuffle(obstacle_types)
 
         for obstacle_type in obstacle_types:
-            if obstacle_type == ObstacleType.HUMAN:
-                min_radius, max_radius = 0.05, 1.5
-                radius = random.uniform(min_radius, max_radius)
-                human_area = math.pi * radius**2
+            # position retry loop to avoid overlaps without an infinite loop
+            for _ in range(30):
+                if obstacle_type == ObstacleType.HUMAN:
+                    #min_radius, max_radius = 0.05, 1.5
+                    #radius = random.uniform(min_radius, max_radius)
+                    radius = 0.5
+                    human_area = math.pi * radius**2
 
-                if not self._can_place(human_area):
-                    continue
+                    if not self._can_place(human_area):
+                        continue
 
-                position = random_point(self.x_domain, self.y_range)
-                obstacle_id = self._next_obstacle_id()
-                self.currently_occupied_obstacle_area += human_area
+                    position = random_point_for_circle(self.x_domain, self.y_range, radius)
+                    obstacle_id = self._next_obstacle_id()
+                    candidate = Obstacle(
+                        obstacle_id=obstacle_id,
+                        obstacle_type=obstacle_type,
+                        position_X_Y=position,
+                        position_X1_Y1=None,
+                        radius=radius,
+                        length=None,
+                        width=None,
+                        area=human_area,
+                    )
+                    if self._overlaps_existing(candidate):
+                        continue
+                    return self._record(candidate)
 
-                return Obstacle(
-                    obstacle_id=obstacle_id,
-                    obstacle_type=obstacle_type,
-                    position_X_Y=position,
-                    position_X1_Y1=None,
-                    radius=radius,
-                    length=None,
-                    width=None,
-                    area=human_area,
-                )
+                if obstacle_type == ObstacleType.STAIRS:
+                    min_width, max_width = 1.0, 3.0
+                    min_length, max_length = 2.0, 4.0
+                    width = random.uniform(min_width, max_width)
+                    length = random.uniform(min_length, max_length)
+                    stairs_area = width * length
 
-            if obstacle_type == ObstacleType.STAIRS:
-                min_width, max_width = 1.0, 3.0
-                min_length, max_length = 2.0, 4.0
-                width = random.uniform(min_width, max_width)
-                length = random.uniform(min_length, max_length)
-                stairs_area = width * length
+                    if not self._can_place(stairs_area):
+                        continue
 
-                if not self._can_place(stairs_area):
-                    continue
+                    p0 = random_point_for_rect(self.x_domain, self.y_range, width, length)
+                    p1 = (p0[0] + width, p0[1] + length)
+                    obstacle_id = self._next_obstacle_id()
+                    candidate = Obstacle(
+                        obstacle_id=obstacle_id,
+                        obstacle_type=obstacle_type,
+                        position_X_Y=p0,
+                        position_X1_Y1=p1,
+                        radius=None,
+                        length=length,
+                        width=width,
+                        area=stairs_area,
+                    )
+                    if self._overlaps_existing(candidate):
+                        continue
+                    return self._record(candidate)
 
-                p0 = random_point(self.x_domain, self.y_range)
-                p1 = (p0[0] + width, p0[1] + length)
-                obstacle_id = self._next_obstacle_id()
-                self.currently_occupied_obstacle_area += stairs_area
-
-                return Obstacle(
-                    obstacle_id=obstacle_id,
-                    obstacle_type=obstacle_type,
-                    position_X_Y=p0,
-                    position_X1_Y1=p1,
-                    radius=None,
-                    length=length,
-                    width=width,
-                    area=stairs_area,
-                )
-
-            if obstacle_type == ObstacleType.WALL:
-                base_span = min(self.env.width, self.env.height)
-                min_width, max_width = 0.25, 0.4
-                min_length, max_length = 0.10 * base_span, 0.50 * base_span
-                width = random.uniform(min_width, max_width)
-                length = random.uniform(min_length, max_length)
-                wall_area = width * length
+                if obstacle_type == ObstacleType.WALL:
+                    base_span = min(self.env.width, self.env.height)
+                    min_width, max_width = 0.25, 0.4
+                    min_length, max_length = 0.10 * base_span, 0.50 * base_span
+                    width = random.uniform(min_width, max_width)
+                    length = random.uniform(min_length, max_length)
+                    wall_area = width * length
 
 
-                if not self._can_place(wall_area):
-                    continue
+                    if not self._can_place(wall_area):
+                        continue
 
-                p0 = random_point(self.x_domain, self.y_range)
-                p1 = (p0[0] + width, p0[1] + length)
-                obstacle_id = self._next_obstacle_id()
-                self.currently_occupied_obstacle_area += wall_area
-
-                return Obstacle(
-                    obstacle_id=obstacle_id,
-                    obstacle_type=obstacle_type,
-                    position_X_Y=p0,
-                    position_X1_Y1=p1,
-                    radius=None,
-                    length=length,
-                    width=width,
-                    area=wall_area,
-                )
+                    p0 = random_point_for_rect(self.x_domain, self.y_range, width, length)
+                    p1 = (p0[0] + width, p0[1] + length)
+                    obstacle_id = self._next_obstacle_id()
+                    candidate = Obstacle(
+                        obstacle_id=obstacle_id,
+                        obstacle_type=obstacle_type,
+                        position_X_Y=p0,
+                        position_X1_Y1=p1,
+                        radius=None,
+                        length=length,
+                        width=width,
+                        area=wall_area,
+                    )
+                    if self._overlaps_existing(candidate):
+                        continue
+                    return self._record(candidate)
+            # exhausted attempts for this type; move on to next type
 
         raise RuntimeError(
             "At least one type should fit by minimum-area check, but random draw did not fit this call. Try again."
@@ -488,12 +581,16 @@ class ChannelFactory:
 def channels_meet_env_constraints(env_type: EnvironmentType, channels: List[Channel]) -> bool:
     """
     Enforce per-environment LOS/NLOS rules:
+    - OUTDOOR: at least 80% of channels must have 0 blocking obstacles (completely free).
     - INDOOR_LOS: at least one channel must have 0 blocking obstacles (completely free).
     - INDOOR_NLOS: no channel may be completely free (each must have >=1 blocker).
-    - OUTDOOR: no constraint.
     """
     if not channels:
         return True  # nothing to validate
+
+    if env_type == EnvironmentType.OUTDOOR:
+        free = sum(1 for ch in channels if ch.blocking_obstacles == 0)
+        return free / len(channels) >= 0.80
 
     if env_type == EnvironmentType.INDOOR_LOS:
         return any(ch.blocking_obstacles == 0 for ch in channels)
@@ -504,8 +601,64 @@ def channels_meet_env_constraints(env_type: EnvironmentType, channels: List[Chan
     return True  # OUTDOOR or future envs
 
 
-"""
-A seed was included for the cases where I want to corroborate that the calculations are """
+def _device_pairs_for_channels(devices: List[Device]) -> List[Tuple[Device, Device]]:
+    antennas = [d for d in devices if d.device_type == DeviceType.ANTENNA]
+    targets = [d for d in devices if d.device_type == DeviceType.TARGET]
+    pairs: List[Tuple[Device, Device]] = []
+    if antennas and targets:
+        for a in antennas:
+            for t in targets:
+                pairs.append((a, t))
+    else:
+        for i in range(len(devices)):
+            for j in range(i + 1, len(devices)):
+                pairs.append((devices[i], devices[j]))
+    return pairs
+
+
+def remove_blocking_obstacles_for_outdoor(
+    env_type: EnvironmentType, obstacles: List[Obstacle], devices: List[Device], *, target_free_ratio: float = 0.80
+) -> List[Obstacle]:
+    """
+    For OUTDOOR envs, greedily remove obstacles that block the most pairs until the fraction of free channels reaches the target ratio.
+    """
+    if env_type != EnvironmentType.OUTDOOR or not obstacles or len(devices) < 2:
+        return obstacles
+
+    pairs = _device_pairs_for_channels(devices)
+    kept = list(obstacles)
+
+    def free_ratio(current_obstacles: List[Obstacle]) -> float:
+        if not pairs:
+            return 1.0
+        blocked = 0
+        for a, b in pairs:
+            if obstacles_blocking_count(a.position, b.position, current_obstacles) > 0:
+                blocked += 1
+        return 1 - (blocked / len(pairs))
+
+    # Remove worst-offending obstacle until we meet target or nothing blocks
+    for _ in range(len(obstacles)):
+        if free_ratio(kept) >= target_free_ratio:
+            break
+
+        # score obstacles by how many pairs they alone block
+        scores = []
+        for ob in kept:
+            blocked_pairs = 0
+            for a, b in pairs:
+                if obstacles_blocking_count(a.position, b.position, [ob]) > 0:
+                    blocked_pairs += 1
+            scores.append((blocked_pairs, ob))
+
+        # pick obstacle that blocks the most pairs; if none block, stop
+        scores.sort(key=lambda t: t[0], reverse=True)
+        if scores and scores[0][0] > 0:
+            kept.remove(scores[0][1])
+        else:
+            break
+
+    return kept
 
 @dataclass
 class NetworkScenario:
@@ -598,6 +751,15 @@ class NetworkScenario:
 
                 channel_factory = ChannelFactory(env, obstacles)
                 channels = channel_factory.build_channels(devices)
+
+        # Outdoor: forcibly drop any obstacle blocking a channel, then rebuild channels to guarantee LOS
+        if env.env_type == EnvironmentType.OUTDOOR and channels:
+            # prune blockers greedily until >=80% channels are free
+            obstacles = remove_blocking_obstacles_for_outdoor(
+                env.env_type, obstacles, devices, target_free_ratio=0.80
+            )
+            channel_factory = ChannelFactory(env, obstacles)
+            channels = channel_factory.build_channels(devices)
 
 
         return cls(

@@ -57,8 +57,11 @@ def plot_scenario(scenario_id: str, scenario: NetworkScenario, out_dir: Path) ->
 
         # Obstacles
         for ob in d["obstacles"]:
-            if ob["obstacle_type"] == "human" and ob.get("radius") is not None:
-                circle = plt.Circle(ob["position_X_Y"], ob["radius"], color="tab:red", alpha=0.35, ec="k")
+            ob_type = ob["obstacle_type"]
+            color = "tab:red" if ob_type in ("human", "stairs") else "tab:gray"
+
+            if ob_type == "human" and ob.get("radius") is not None:
+                circle = plt.Circle(ob["position_X_Y"], ob["radius"], color=color, alpha=0.35, ec="k")
                 ax.add_artist(circle)
             else:
                 p0 = ob["position_X_Y"]
@@ -66,7 +69,7 @@ def plot_scenario(scenario_id: str, scenario: NetworkScenario, out_dir: Path) ->
                 if p1:
                     width = p1[0] - p0[0]
                     height = p1[1] - p0[1]
-                    rect = plt.Rectangle(p0, width, height, color="tab:red", alpha=0.35, ec="k")
+                    rect = plt.Rectangle(p0, width, height, color=color, alpha=0.35, ec="k")
                     ax.add_patch(rect)
 
         # Devices
@@ -78,10 +81,19 @@ def plot_scenario(scenario_id: str, scenario: NetworkScenario, out_dir: Path) ->
                 ax.scatter(x, y, color="tab:blue", edgecolors="k", s=50, marker="^", label="antenna")
 
         # Channels
+        show_los_label = True
+        env_type = d["environment"]["env_type"]
         for ch in d["channels"]:
             xa, ya = ch["device_a_position"]
             xb, yb = ch["device_b_position"]
-            ax.plot([xa, xb], [ya, yb], color="gray", alpha=0.4, linewidth=1)
+
+            is_free_los = env_type in ("indoor_LOS", "outdoor") and ch.get("blocking_obstacles", 0) == 0
+            if is_free_los:
+                ax.plot([xa, xb], [ya, yb], color="red", alpha=0.7, linewidth=2,
+                        label="LOS free" if show_los_label else None)
+                show_los_label = False
+            else:
+                ax.plot([xa, xb], [ya, yb], color="gray", alpha=0.4, linewidth=1)
 
         # Deduplicate legend
         handles, labels = ax.get_legend_handles_labels()
