@@ -1,12 +1,12 @@
 import argparse
 from pathlib import Path
 from typing import Dict, List, Any, Optional
-
 import matplotlib
 matplotlib.use("Agg")  # headless / non-GUI
 import matplotlib.pyplot as plt
 import pandas as pd
 from general_envs import NetworkScenario
+
 
 
 """
@@ -195,6 +195,7 @@ def scenario_to_rows(
     }
 
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate random network scenarios")
     parser.add_argument(
@@ -259,6 +260,7 @@ def main() -> None:
         pd.DataFrame(device_rows).to_parquet(out_dir / "devices.parquet", index=False)
         pd.DataFrame(obstacle_rows).to_parquet(out_dir / "obstacles.parquet", index=False)
         pd.DataFrame(channel_rows).to_parquet(out_dir / "channels.parquet", index=False)
+
 
 
 if __name__ == "__main__":

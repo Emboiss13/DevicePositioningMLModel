@@ -18,9 +18,11 @@ This module defines the core data structures and random generation logic for our
 
 """
 
-# ------------------------------------------------------------------------------
-#  TYPES
-# ------------------------------------------------------------------------------
+
+
+"""------------------------------------------------------------------------------
+  TYPES
+------------------------------------------------------------------------------"""
 
 class EnvironmentType(str, Enum):
     INDOOR_LOS = "indoor_LOS"
@@ -38,6 +40,8 @@ class ObstacleType(str, Enum):
     WALL = "wall"                    # max width ~0.3m, max length proportional to environment size
     STAIRS = "stairs"                # max width ~3m, max length 3-4m
     HUMAN = "human"                  # radius 0.05-1.5m (standing, sitting, lying down)
+
+
 
 """------------------------------------------------------------------------------
  🌍 GLOBAL HELPER FUNCTIONS 🌍
@@ -75,6 +79,8 @@ def generate_id(counter: int, prefix: str) -> str:
 
 def clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
+
+
 
 """------------------------------------------------------------------------------
  🌳 ENVIRONMENT 🌳
@@ -114,6 +120,7 @@ class Environment:
         self.grid_area = self.width * self.height
         self.x_domain = (-self.width / 2, self.width / 2)
         self.y_range = (-self.height / 2, self.height / 2)
+
 
 
 """
@@ -721,6 +728,7 @@ def remove_blocking_obstacles_for_indoor_los(
             kept.remove(ob)
 
     return kept
+
 
 
 """------------------------------------------------------------------------------
