@@ -6,16 +6,17 @@ import matplotlib
 matplotlib.use("Agg")  # headless / non-GUI
 import matplotlib.pyplot as plt
 import pandas as pd
-from general_structure import NetworkScenario
+from general_envs import NetworkScenario
 
 
 """
 Generate one or more random network scenarios and print a short summary for each.
 
-Usage examples
+USAGE EXAMPLES:
 --------------
-python3 run_scenarios.py --count 5
-python3 run_scenarios.py --count 10 --seed 2
+python3 create_network_envs.py --count 5
+python3 create_network_envs.py --count 10 --seed 2
+python3 create_network_envs.py --count 1 --output-dir generated_network_scenarios --plot
 """
 
 def summarize_scenario(idx: int, scenario: NetworkScenario) -> None:
@@ -211,8 +212,8 @@ def main() -> None:
     parser.add_argument(
         "--output-dir",
         type=str,
-        default="general_data",
-        help="Directory where Parquet files will be written (default: general_data)",
+        default="generated_network_scenarios",
+        help="Directory where Parquet files will be written (default: generated_network_scenarios)",
     )
     parser.add_argument(
         "--no-save",

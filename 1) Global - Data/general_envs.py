@@ -2,22 +2,19 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 import math
-from typing import Any, Dict, List, Tuple, Optional, TypeVar, Type
+from typing import Any, Dict, List, Tuple, Optional
 import random
 
 """
-------------------------------------------------------------------------------
-TOTAL OCCUPIED AREA CONSTRAINTS
-------------------------------------------------------------------------------
 
-DEVICES
- - Max 15% of the area can be occupied by devices
- - We need the antennas to fill the space to ensure connectivity, but they also need to be spaced out to create a realistic scenario
+GENERAL ENVIRONMENTS ATTRIBUTES AND METHODS
 
-OBSTACLES
- - OUTDOOR: Max 10%
- - INDOOR LOS: Max 20%
- - INDOOR NLOS: Max 30%
+This module defines the core data structures and random generation logic for our network scenarios, including:
+
+- Environment: defines the physical space and type (indoor LOS/NLOS, outdoor).
+- Device: represents antennas and target endpoints, with position and type.
+- Obstacle: represents walls, stairs, and humans, with position and size.
+- Channel: represents a communication link between two devices, with distance, frequency, and blocking obstacles.
 
 """
 
@@ -42,9 +39,9 @@ class ObstacleType(str, Enum):
     STAIRS = "stairs"                # max width ~3m, max length 3-4m
     HUMAN = "human"                  # radius 0.05-1.5m (standing, sitting, lying down)
 
-# ------------------------------------------------------------------------------
-# 🌍 GLOBAL HELPER FUNCTIONS 🌍
-# ------------------------------------------------------------------------------
+"""------------------------------------------------------------------------------
+ 🌍 GLOBAL HELPER FUNCTIONS 🌍
+ ------------------------------------------------------------------------------"""
 
 def random_choice(choices: List[Any]) -> Any:
     return random.choice(choices)
@@ -79,9 +76,9 @@ def generate_id(counter: int, prefix: str) -> str:
 def clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
-# ------------------------------------------------------------------------------
-# 🌳 ENVIRONMENT 🌳
-# ------------------------------------------------------------------------------
+"""------------------------------------------------------------------------------
+ 🌳 ENVIRONMENT 🌳
+------------------------------------------------------------------------------"""
 
 # Grid size bounds (meters)
 def random_grid_size(bounds_min: float, bounds_max: float) -> Tuple[float, float]:
@@ -118,9 +115,26 @@ class Environment:
         self.x_domain = (-self.width / 2, self.width / 2)
         self.y_range = (-self.height / 2, self.height / 2)
 
-# ------------------------------------------------------------------------------
-# 📡 DEVICES 🖥️
-# ------------------------------------------------------------------------------
+
+"""
+------------------------------------------------------------------------------
+TOTAL OCCUPIED AREA CONSTRAINTS
+------------------------------------------------------------------------------
+
+DEVICES
+ - Max 15% of the area can be occupied by devices
+ - We need the antennas to fill the space to ensure connectivity, but they also need to be spaced out to create a realistic scenario
+
+OBSTACLES
+ - OUTDOOR: Max 10%
+ - INDOOR LOS: Max 20%
+ - INDOOR NLOS: Max 30%
+
+"""
+
+"""------------------------------------------------------------------------------
+ 📡 DEVICES 🖥️
+------------------------------------------------------------------------------"""
 
 @dataclass
 class Device:
@@ -139,7 +153,7 @@ class DeviceFactory:
     """
     def __init__(self, env: Environment) -> None:
 
-        self.allowed_device_area = env.grid_area * 0.15 # 15% of the area can be occupied by
+        self.allowed_device_area = env.grid_area * 0.15 # 15% of the area can be occupied by devices
         self.currently_occupied_device_area: float = 0
         self.x_domain = env.x_domain
         self.y_range = env.y_range
@@ -168,14 +182,14 @@ class DeviceFactory:
 
 
 
-# ------------------------------------------------------------------------------
-# 🧱 OBSTACLES 🪴
-# ------------------------------------------------------------------------------
+"""------------------------------------------------------------------------------
+ 🧱 OBSTACLES 👩🏻‍💻
+------------------------------------------------------------------------------"""
 
+# These values can be tested for accuracy (model training)
 def allowed_obstacle_area(env_type: EnvironmentType) -> float:
-    # return FRACTION of grid area
+    # return fraction of grid area
     if env_type == EnvironmentType.OUTDOOR:
-        # Sample a lighter density each run to vary clutter (0–20% of grid)
         return random.uniform(0.0, 0.10)
     if env_type == EnvironmentType.INDOOR_LOS:
         return random.uniform(0.10, 0.20)
@@ -197,7 +211,7 @@ class Obstacle:
     obstacle_id: str
     obstacle_type: ObstacleType
     position_X_Y: Tuple[float, float]
-    position_X1_Y1: Optional[Tuple[float, float]]    # rect opposite corner
+    position_X1_Y1: Optional[Tuple[float, float]]     # rect opposite corner
     radius: Optional[float]                           # humans only
     length: Optional[float]                           # rect only
     width: Optional[float]                            # rect only
@@ -206,7 +220,7 @@ class Obstacle:
 
 class ObstacleFactory:
     """
-    Builds Obstacles for a scenario considering the following constraints: 
+    Builds obstacles for a scenario considering the following constraints: 
 
     - OUTDOOR: Max space occupied by obstacles 10% (free-space = 90% - 15% devices = 75%)
     - INDOOR_LOS: Max space occupied by obstacles 20% (free-space = 80% - 15% devices = 65%)
@@ -215,7 +229,6 @@ class ObstacleFactory:
     def __init__(self, env: Environment) -> None:
         self.env = env
         self.obstacle_counter = 0
-        # absolute m^2 budget = fraction * grid_area
         self.allowed_obstacle_area = env.grid_area * allowed_obstacle_area(env.env_type)
         self.currently_occupied_obstacle_area = 0.0
         self.x_domain = env.x_domain
@@ -236,8 +249,8 @@ class ObstacleFactory:
 
     def _min_area_for_type(self, t: ObstacleType) -> float:
         if t == ObstacleType.HUMAN:
-            min_radius = 0.05
-            return math.pi * (min_radius ** 2)
+            #50 cm = 0.5 m
+            return math.pi * (0.5 ** 2)
 
         if t == ObstacleType.STAIRS:
             min_width, min_length = 1.0, 2.0
@@ -257,7 +270,7 @@ class ObstacleFactory:
     def can_fit_any_obstacle(self) -> bool:
         return self._remaining_area() >= self._global_min_possible_area()
 
-    # --- overlap helpers ---
+    # --- Overlap helper functions ---
     def _rect_bounds_from_points(self, p0: Tuple[float, float], p1: Tuple[float, float]) -> Tuple[float, float, float, float]:
         x0, y0 = p0
         x1, y1 = p1
@@ -293,7 +306,7 @@ class ObstacleFactory:
     ) -> bool:
         minx, maxx, miny, maxy = rect
         cx, cy = center
-        # closest point in the rectangle to the circle center
+        # Closest point in the rectangle to the circle center
         closest_x = clamp(cx, minx, maxx)
         closest_y = clamp(cy, miny, maxy)
         dx = cx - closest_x
@@ -330,16 +343,16 @@ class ObstacleFactory:
         if not self.can_fit_any_obstacle():
             raise RuntimeError("No obstacle can fit in the remaining allowed area.")
 
-        # Try each type once in random order; avoids invalid 'continue' outside loop.
+        # Try each type once in random order
         obstacle_types = list(ObstacleType)
         random.shuffle(obstacle_types)
 
         for obstacle_type in obstacle_types:
-            # position retry loop to avoid overlaps without an infinite loop
+            # Position retry loop to avoid overlaps without an infinite loop
             for _ in range(30):
                 if obstacle_type == ObstacleType.HUMAN:
-                    #min_radius, max_radius = 0.05, 1.5
-                    #radius = random.uniform(min_radius, max_radius)
+                    # min_radius, max_radius = 0.05, 1.5
+                    # radius = random.uniform(min_radius, max_radius)
                     radius = 0.5
                     human_area = math.pi * radius**2
 
@@ -417,7 +430,7 @@ class ObstacleFactory:
                     if self._overlaps_existing(candidate):
                         continue
                     return self._record(candidate)
-            # exhausted attempts for this type; move on to next type
+            # Exhausted attempts for this type; move on to next type
 
         raise RuntimeError(
             "At least one type should fit by minimum-area check, but random draw did not fit this call. Try again."
@@ -425,9 +438,9 @@ class ObstacleFactory:
 
 
 
-# ------------------------------------------------------------------------------
-# 🎛️ CHANNELS 📶
-# ------------------------------------------------------------------------------
+"""------------------------------------------------------------------------------
+ 🎛️ CHANNELS 📶
+------------------------------------------------------------------------------"""
 
 def euclidean_distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
     dx = p1[0] - p2[0]
@@ -598,7 +611,7 @@ def channels_meet_env_constraints(env_type: EnvironmentType, channels: List[Chan
     if env_type == EnvironmentType.INDOOR_NLOS:
         return all(ch.blocking_obstacles >= 1 for ch in channels)
 
-    return True  # OUTDOOR or future envs
+    return True
 
 
 def _device_pairs_for_channels(devices: List[Device]) -> List[Tuple[Device, Device]]:
@@ -615,7 +628,8 @@ def _device_pairs_for_channels(devices: List[Device]) -> List[Tuple[Device, Devi
                 pairs.append((devices[i], devices[j]))
     return pairs
 
-
+# This is probably not the most efficient way of doing this but it id good enough for now
+# Could be optimised and improved in the future
 def remove_blocking_obstacles_for_outdoor(
     env_type: EnvironmentType, obstacles: List[Obstacle], devices: List[Device], *, target_free_ratio: float = 0.80
 ) -> List[Obstacle]:
@@ -659,6 +673,59 @@ def remove_blocking_obstacles_for_outdoor(
             break
 
     return kept
+
+
+def remove_blocking_obstacles_for_indoor_los(
+    env_type: EnvironmentType, obstacles: List[Obstacle], devices: List[Device]
+) -> List[Obstacle]:
+    """
+    For INDOOR_LOS envs, ensure at least one channel can be completely free by
+    removing the minimum blockers for a single best device pair.
+    """
+    if env_type != EnvironmentType.INDOOR_LOS or not obstacles or len(devices) < 2:
+        return obstacles
+
+    pairs = _device_pairs_for_channels(devices)
+    if not pairs:
+        return obstacles
+
+    kept = list(obstacles)
+
+    # If already valid, keep as-is.
+    for a, b in pairs:
+        if obstacles_blocking_count(a.position, b.position, kept) == 0:
+            return kept
+
+    # Choose the pair with the fewest blockers and remove only those blockers.
+    best_pair: Optional[Tuple[Device, Device]] = None
+    best_blockers: Optional[List[Obstacle]] = None
+
+    for a, b in pairs:
+        blockers: List[Obstacle] = []
+        for ob in kept:
+            if obstacles_blocking_count(a.position, b.position, [ob]) > 0:
+                blockers.append(ob)
+
+        if best_blockers is None or len(blockers) < len(best_blockers):
+            best_pair = (a, b)
+            best_blockers = blockers
+
+            if len(best_blockers) == 0:
+                break
+
+    if best_pair is None or best_blockers is None:
+        return kept
+
+    for ob in best_blockers:
+        if ob in kept:
+            kept.remove(ob)
+
+    return kept
+
+
+"""------------------------------------------------------------------------------
+ 🛜 NETWORK SCENARIOS 📍
+------------------------------------------------------------------------------"""
 
 @dataclass
 class NetworkScenario:
@@ -749,6 +816,16 @@ class NetworkScenario:
                     except RuntimeError:
                         break
 
+                channel_factory = ChannelFactory(env, obstacles)
+                channels = channel_factory.build_channels(devices)
+
+        # Indoor LOS: if random regeneration couldn't satisfy constraints within attempts,
+        # deterministically remove blockers for one pair, then rebuild channels.
+        if env.env_type == EnvironmentType.INDOOR_LOS and channels:
+            if not channels_meet_env_constraints(env.env_type, channels):
+                obstacles = remove_blocking_obstacles_for_indoor_los(
+                    env.env_type, obstacles, devices
+                )
                 channel_factory = ChannelFactory(env, obstacles)
                 channels = channel_factory.build_channels(devices)
 
