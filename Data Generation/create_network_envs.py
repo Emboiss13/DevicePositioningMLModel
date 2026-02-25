@@ -184,13 +184,12 @@ def scenario_to_rows(
                 "device_b_id": channel["device_b_id"],
                 "device_b_position": channel["device_b_position"],
                 "distance_m": channel["distance_m"],
-                "initial_freq_mhz": channel["initial_freq_mhz"],
                 "blocking_obstacles": channel["blocking_obstacles"],
             }
         )
 
     return {
-        "summary": [env_summary_row],
+        "env_summary": [env_summary_row],
         "devices": device_rows,
         "obstacles": obstacle_rows,
         "channels": channel_rows,

@@ -541,7 +541,6 @@ class Channel:
     device_b_id: str
     device_b_position: Tuple[float, float]
     distance_m: float
-    freq_mhz: float
     blocking_obstacles: int
 
 
@@ -557,16 +556,12 @@ class ChannelFactory:
         self,
         env: Environment,
         obstacles: List[Obstacle],
-        *,
-        freq_ghz: float = 5.0,
     ) -> None:
         self.env = env
         self.obstacles = obstacles
-        self.freq_ghz = freq_ghz
 
     def _make_channel(self, a: Device, b: Device) -> Channel:
         d = euclidean_distance(a.position, b.position)
-        f = self.freq_ghz * 1000.0  # convert to MHz
         blocks = obstacles_blocking_count(a.position, b.position, self.obstacles)
 
         return Channel(
@@ -575,7 +570,6 @@ class ChannelFactory:
             device_b_id=b.device_id,
             device_b_position=b.position,
             distance_m=d,
-            freq_mhz=f,
             blocking_obstacles=blocks,
         )
 
