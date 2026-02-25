@@ -5,7 +5,7 @@ import matplotlib
 matplotlib.use("Agg")  # headless / non-GUI
 import matplotlib.pyplot as plt
 import pandas as pd
-from general_envs import NetworkScenario
+from general_envs_factory import NetworkScenario
 
 
 
@@ -123,7 +123,7 @@ def scenario_to_rows(
     """Flatten a scenario into row dictionaries for each table."""
     dict = scenario.to_dict()
 
-    summary_row = {
+    env_summary_row = {
         "scenario_id": scenario_id,
         "seed": seed,
         "label": dict["label"],
@@ -180,15 +180,17 @@ def scenario_to_rows(
                 "scenario_id": scenario_id,
                 "seed": seed,
                 "device_a_id": channel["device_a_id"],
+                "device_a_position": channel["device_a_position"],
                 "device_b_id": channel["device_b_id"],
+                "device_b_position": channel["device_b_position"],
                 "distance_m": channel["distance_m"],
-                "freq_mhz": channel["freq_mhz"],
+                "initial_freq_mhz": channel["initial_freq_mhz"],
                 "blocking_obstacles": channel["blocking_obstacles"],
             }
         )
 
     return {
-        "summary": [summary_row],
+        "summary": [env_summary_row],
         "devices": device_rows,
         "obstacles": obstacle_rows,
         "channels": channel_rows,
@@ -232,7 +234,7 @@ def main() -> None:
     out_dir = Path(args.output_dir)
 
     # Collect rows for each table across all scenarios
-    summary_rows: List[Dict[str, Any]] = []
+    env_summary_rows: List[Dict[str, Any]] = []
     device_rows: List[Dict[str, Any]] = []
     obstacle_rows: List[Dict[str, Any]] = []
     channel_rows: List[Dict[str, Any]] = []
@@ -249,14 +251,14 @@ def main() -> None:
                 plot_path = plot_scenario(scenario_id, network_scenario, out_dir)
 
             rows = scenario_to_rows(scenario_id, scenario_seed, network_scenario, plot_path)
-            summary_rows.extend(rows["summary"])
+            env_summary_rows.extend(rows["env_summary"])
             device_rows.extend(rows["devices"])
             obstacle_rows.extend(rows["obstacles"])
             channel_rows.extend(rows["channels"])
 
     if not args.no_save:
         out_dir.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(summary_rows).to_parquet(out_dir / "summary.parquet", index=False)
+        pd.DataFrame(env_summary_rows).to_parquet(out_dir / "env_summary.parquet", index=False)
         pd.DataFrame(device_rows).to_parquet(out_dir / "devices.parquet", index=False)
         pd.DataFrame(obstacle_rows).to_parquet(out_dir / "obstacles.parquet", index=False)
         pd.DataFrame(channel_rows).to_parquet(out_dir / "channels.parquet", index=False)
