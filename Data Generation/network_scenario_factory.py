@@ -33,7 +33,6 @@ class NetworkScenario:
     def generate_random(
         cls,
         *,
-        label: str = "random_scenario",
         seed: Optional[int] = None,
     ) -> "NetworkScenario":
         if seed is not None:
