@@ -1,13 +1,14 @@
 import argparse
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import matplotlib
-matplotlib.use("Agg")  # headless / non-GUI
 import matplotlib.pyplot as plt
 import pandas as pd
-from general_envs_factory import NetworkScenario
 
+from network_scenario_factory import NetworkScenario
 
+matplotlib.use("Agg")  # headless / non-GUI
 
 """
 Generate one or more random network scenarios and print a short summary for each.
@@ -19,27 +20,28 @@ python3 create_network_envs.py --count 10 --seed 2
 python3 create_network_envs.py --count 1 --output-dir generated_network_scenarios --plot
 """
 
+
 def summarize_scenario(idx: int, scenario: NetworkScenario) -> None:
     scenario_dict = scenario.to_dict()
     print(f"Scenario {idx}")
     print(
-        "  env:",
-        scenario_dict["environment"]["env_type"],
-        "area:",
+        "  area:",
         round(scenario_dict["environment"]["grid_area"], 2),
+        "width:",
+        round(scenario_dict["environment"]["width"], 2),
+        "height:",
+        round(scenario_dict["environment"]["height"], 2),
     )
     print(
-        "  devices:", len(scenario_dict["devices"]),
+        "  antennas:", len(scenario_dict["antennas"]),
         "obstacles:", len(scenario_dict["obstacles"]),
-        "channels:", len(scenario_dict["channels"]),
     )
-    print("  target_selected:", scenario_dict["target_selected"])
     print()
 
 
 def plot_scenario(scenario_id: str, scenario: NetworkScenario, out_dir: Path) -> Optional[str]:
     """
-    Render the scenario (devices, obstacles, channels) and save to PNG.
+    Render the scenario (antennas + obstacles) and save to PNG.
     Returns the relative path to the saved image, or None on failure.
     """
     try:
@@ -52,7 +54,7 @@ def plot_scenario(scenario_id: str, scenario: NetworkScenario, out_dir: Path) ->
         ax.set_xlim(xmin, xmax)
         ax.set_ylim(ymin, ymax)
         ax.set_aspect("equal", adjustable="box")
-        ax.set_title(f"{scenario_id} - {d['environment']['env_type']}")
+        ax.set_title(f"{scenario_id}")
         ax.set_xlabel("x (m)")
         ax.set_ylabel("y (m)")
 
@@ -73,28 +75,21 @@ def plot_scenario(scenario_id: str, scenario: NetworkScenario, out_dir: Path) ->
                     rect = plt.Rectangle(p0, width, height, color=color, alpha=0.35, ec="k")
                     ax.add_patch(rect)
 
-        # Devices
-        for dev in d["devices"]:
-            x, y = dev["position"]
-            if dev["device_type"] == "target_endpoint":
-                ax.scatter(x, y, color="gold", edgecolors="k", s=80, marker="*", label="target")
-            else:
-                ax.scatter(x, y, color="tab:blue", edgecolors="k", s=50, marker="^", label="antenna")
-
-        # Channels
-        show_los_label = True
-        env_type = d["environment"]["env_type"]
-        for ch in d["channels"]:
-            xa, ya = ch["device_a_position"]
-            xb, yb = ch["device_b_position"]
-
-            is_free_los = env_type in ("indoor_LOS", "outdoor") and ch.get("blocking_obstacles", 0) == 0
-            if is_free_los:
-                ax.plot([xa, xb], [ya, yb], color="red", alpha=0.7, linewidth=2,
-                        label="LOS free" if show_los_label else None)
-                show_los_label = False
-            else:
-                ax.plot([xa, xb], [ya, yb], color="gray", alpha=0.4, linewidth=1)
+        # Antennas + coverage
+        for idx, antenna in enumerate(d["antennas"]):
+            x, y = antenna["position"]
+            radius = antenna["coverage_radius"]
+            ax.scatter(
+                x,
+                y,
+                color="tab:blue",
+                edgecolors="k",
+                s=50,
+                marker="^",
+                label="antenna" if idx == 0 else None,
+            )
+            cover = plt.Circle((x, y), radius, color="tab:blue", alpha=0.07, ec="tab:blue")
+            ax.add_artist(cover)
 
         # Deduplicate legend
         handles, labels = ax.get_legend_handles_labels()
@@ -116,44 +111,45 @@ def plot_scenario(scenario_id: str, scenario: NetworkScenario, out_dir: Path) ->
 
 def scenario_to_rows(
     scenario_id: str,
-    seed: int,
+    seed: Optional[int],
     scenario: NetworkScenario,
     plot_path: Optional[str],
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Flatten a scenario into row dictionaries for each table."""
-    dict = scenario.to_dict()
+    scenario_dict = scenario.to_dict()
 
+    env = scenario_dict["environment"]
     env_summary_row = {
         "scenario_id": scenario_id,
         "seed": seed,
-        "label": dict["label"],
-        "env_type": dict["environment"]["env_type"],
-        "grid_area": dict["environment"]["grid_area"],
-        "width": dict["environment"]["width"],
-        "height": dict["environment"]["height"],
-        "target_selected": dict["target_selected"],
-        "device_count": len(dict["devices"]),
-        "obstacle_count": len(dict["obstacles"]),
-        "channel_count": len(dict["channels"]),
+        "grid_area": env["grid_area"],
+        "width": env["width"],
+        "height": env["height"],
+        "x_domain_min": env["x_domain"][0],
+        "x_domain_max": env["x_domain"][1],
+        "y_range_min": env["y_range"][0],
+        "y_range_max": env["y_range"][1],
+        "antenna_count": len(scenario_dict["antennas"]),
+        "obstacle_count": len(scenario_dict["obstacles"]),
         "plot_path": plot_path,
     }
 
-    device_rows = []
-    for device in dict["devices"]:
-        device_rows.append(
+    antenna_rows = []
+    for antenna in scenario_dict["antennas"]:
+        antenna_rows.append(
             {
                 "scenario_id": scenario_id,
                 "seed": seed,
-                "device_id": device["device_id"],
-                "device_type": device["device_type"],
-                "is_target": device["is_target"],
-                "x": device["position"][0],
-                "y": device["position"][1],
+                "antenna_id": antenna["antenna_id"],
+                "antenna_label": antenna["antenna_label"],
+                "x": antenna["position"][0],
+                "y": antenna["position"][1],
+                "coverage_radius": antenna["coverage_radius"],
             }
         )
 
     obstacle_rows = []
-    for obstacle in dict["obstacles"]:
+    for obstacle in scenario_dict["obstacles"]:
         p0 = obstacle["position_X_Y"]
         p1 = obstacle.get("position_X1_Y1")
         obstacle_rows.append(
@@ -161,6 +157,7 @@ def scenario_to_rows(
                 "scenario_id": scenario_id,
                 "seed": seed,
                 "obstacle_id": obstacle["obstacle_id"],
+                "obstacle_label": obstacle.get("obstacle_label"),
                 "obstacle_type": obstacle["obstacle_type"],
                 "x0": p0[0],
                 "y0": p0[1],
@@ -173,28 +170,11 @@ def scenario_to_rows(
             }
         )
 
-    channel_rows = []
-    for channel in dict["channels"]:
-        channel_rows.append(
-            {
-                "scenario_id": scenario_id,
-                "seed": seed,
-                "device_a_id": channel["device_a_id"],
-                "device_a_position": channel["device_a_position"],
-                "device_b_id": channel["device_b_id"],
-                "device_b_position": channel["device_b_position"],
-                "distance_m": channel["distance_m"],
-                "blocking_obstacles": channel["blocking_obstacles"],
-            }
-        )
-
     return {
         "env_summary": [env_summary_row],
-        "devices": device_rows,
+        "antennas": antenna_rows,
         "obstacles": obstacle_rows,
-        "channels": channel_rows,
     }
-
 
 
 def main() -> None:
@@ -234,9 +214,8 @@ def main() -> None:
 
     # Collect rows for each table across all scenarios
     env_summary_rows: List[Dict[str, Any]] = []
-    device_rows: List[Dict[str, Any]] = []
+    antenna_rows: List[Dict[str, Any]] = []
     obstacle_rows: List[Dict[str, Any]] = []
-    channel_rows: List[Dict[str, Any]] = []
 
     for iteration in range(1, args.count + 1):
         # Vary the seed per scenario so each run is different even with a base seed
@@ -251,17 +230,14 @@ def main() -> None:
 
             rows = scenario_to_rows(scenario_id, scenario_seed, network_scenario, plot_path)
             env_summary_rows.extend(rows["env_summary"])
-            device_rows.extend(rows["devices"])
+            antenna_rows.extend(rows["antennas"])
             obstacle_rows.extend(rows["obstacles"])
-            channel_rows.extend(rows["channels"])
 
     if not args.no_save:
         out_dir.mkdir(parents=True, exist_ok=True)
         pd.DataFrame(env_summary_rows).to_parquet(out_dir / "env_summary.parquet", index=False)
-        pd.DataFrame(device_rows).to_parquet(out_dir / "devices.parquet", index=False)
+        pd.DataFrame(antenna_rows).to_parquet(out_dir / "antennas.parquet", index=False)
         pd.DataFrame(obstacle_rows).to_parquet(out_dir / "obstacles.parquet", index=False)
-        pd.DataFrame(channel_rows).to_parquet(out_dir / "channels.parquet", index=False)
-
 
 
 if __name__ == "__main__":

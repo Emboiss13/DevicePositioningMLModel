@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+import math
 import random
 from pathlib import Path
 from typing import Union
@@ -16,12 +17,13 @@ RSSI SPECIFIC ATTRIBUTES AND METHODS
 This module defines the core data structures and random generation logic for RSSI to calculate a position estimation
 given a given network scenarios, using equation:
 
-    RSSI = -10nlog_{10}(d)+A
+    RSSI_{i,j} = P_t + G_{Tx} + G_{Rx} - PL_{i,j}
 
-        n) Path-loss exponent, which indicates the rate at which signal strength decreases relative to distance (
-        d) The distance between the transmitter and the receiver (typically in meters).
-        A) The reference value measured at a distance of 1 meter from the transmitter. 
-
+        where:
+        - P_t = is transmit power (dBm)
+        - G_{Tx} / G_{Rx} are antenna gains (dBi)
+        - PL_{i,j} = total path loss (dB)
+    
     - Path Loss exponent: The average rate at which signal power decays with distance and depends on the propagation environment.
 
     - Log-Distance Path Loss Model: The large-scale average path loss between two devices separated by distance (d)
@@ -34,9 +36,7 @@ given a given network scenarios, using equation:
 RUNNIG SCRIPT
 -------------
 python3 "Data Generation/RSSI/RSSI_envs.py" --data-dir "generated_network_scenarios"
-python3 "Data Generation/RSSI/RSSI_envs.py" --data-dir "generated_network_scenarios" --seed 42 --reference-distance-m 1.0
-
-
+python3 "Data Generation/RSSI/RSSI_envs.py" --data-dir "generated_network_scenarios" --seed 42 --tx-power-dbm 0.0
 
 """
 
@@ -51,12 +51,6 @@ SHADOW_SIGMA_DB_RANGES = {
     EnvironmentType.OUTDOOR: (4, 12),
     EnvironmentType.INDOOR_LOS: (5, 12),
     EnvironmentType.INDOOR_NLOS: (5, 12),
-}
-
-A_DBM_RANGES = {
-    EnvironmentType.OUTDOOR: (-55.0, -35.0),
-    EnvironmentType.INDOOR_LOS: (-50.0, -30.0),
-    EnvironmentType.INDOOR_NLOS: (-65.0, -40.0),
 }
 
 
@@ -77,8 +71,55 @@ def shadow_sigma_given_env_type(env: Union[str, EnvironmentType]) -> float:
     lo, hi = SHADOW_SIGMA_DB_RANGES[env_type]
     return random.uniform(lo, hi)
 
+"""
+We will run through every channel in an environment and perform the same calculations. 
 
-def extract_rssi_channel_inputs(data_dir: Union[str, Path]) -> pd.DataFrame:
+So we will have General, RSSI, TDOA and DOA channel columns. 
+
+The columns will only hold the extra parameters which we cannot find in the general column. 
+
+Later on in the ML pipeline we can define how we output all the values to train the model.
+"""
+
+# Returns the DB signal strength path loss
+# Log-Distance Path Loss Model formula: PL(d) = PL(d_0) + 10 n \log_{10}\!\left(\frac{d}{d_0}\right)
+# PL(d_0) = PL(d_0) = 20 \log_{10}\!\left(\frac{4\pi d_0}{\lambda}\right)
+# lambda = \lambda = \frac{c}{f}
+# c = speed of light
+# f = frequency is 5GHZ
+def _calc_log_distance_path_loss_model(path_loss_exponent: float, distance: float) -> float:
+
+    #1) Free-Space Path Loss at the reference distance
+    frequency: int = 5e9 #5,000,000,000 hertz
+    speed_of_light: int = 2.99792458e8 # 299 792 458 m/s
+    reference_distance_d0: int = 1 # meter
+    wavelength: int = speed_of_light / frequency
+    pl_d_0: float = 20 * np.log10(4 * np.pi * reference_distance_d0 / wavelength)
+    
+    
+    #2) Log-Distance Path Loss Model
+    pl_d = pl_d_0 + 10 * path_loss_exponent * np.log10(distance / reference_distance_d0)
+
+    return pl_d
+
+
+def _calc_log_normal_shadowing_gaussian_noise(path_loss_at_distance_d: float, noise_std_dev: float) -> float:
+
+    x_sigma = np.random.normal(loc=0.0, scale=noise_std_dev)
+
+    pl_d = path_loss_at_distance_d + x_sigma
+
+    return pl_d
+
+
+#def _set_transmit_power(): 
+
+#def _set_antenna_gains(): 
+
+
+
+
+def extract_rssi_channel_inputs(data_dir: Union[str, Path]) -> pd.DataFrame
     """
     Return one row per channel with channel columns preserved plus environment label.
     Required columns for RSSI formulas:
@@ -137,21 +178,24 @@ def create_scenario_rssi_parameters(
         lo, hi = SHADOW_SIGMA_DB_RANGES[env_type]
         return rng.uniform(lo, hi)
 
-    def sample_a_dbm(env: str) -> float:
-        env_type = _as_env_type(env)
-        lo, hi = A_DBM_RANGES[env_type]
-        return rng.uniform(lo, hi)
-
     rssi_network_scenario["path_loss_exponent_n"] = rssi_network_scenario["env_type"].map(sample_n)
     rssi_network_scenario["shadow_sigma_db"] = rssi_network_scenario["env_type"].map(sample_sigma)
-    rssi_network_scenario["initial_signal_strength_dbm"] = rssi_network_scenario["env_type"].map(sample_a_dbm)
     return rssi_network_scenario
+
+
+def _calculate_path(
+) -> pd.Series:
+    """Compute RSSI reference A(d0) from frequency using free-space loss at d0."""
+    speed_light_m_per_s = 299_792_458.0
+    freq_hz = freq_mhz.astype(float) * 1e6
+    pl_d0_db = 20.0 * np.log10((4.0 * math.pi * reference_distance_m * freq_hz) / speed_light_m_per_s)
+    return float(tx_power_dbm) - pl_d0_db
 
 
 def build_rssi_base_table(
     data_dir: Union[str, Path],
     seed: int | None = None,
-    reference_a_dbm: float | None = None,
+    tx_power_dbm: float = 0.0,
     reference_distance_m: float = 1.0,
 ) -> pd.DataFrame:
     """
@@ -160,9 +204,9 @@ def build_rssi_base_table(
     Added columns:
     - path_loss_exponent_n (scenario-level)
     - shadow_sigma_db (scenario-level)
-    - initial_signal_strength_dbm (A at reference_distance_m)
     - shadow_noise_db (Gaussian shadowing term X_sigma)
     - path_loss_db_with_noise
+    - initial_signal_strength_dbm
     - signal_strength_dbm (RSSI)
     """
     if reference_distance_m <= 0:
@@ -184,8 +228,12 @@ def build_rssi_base_table(
 
     np_rng = np.random.default_rng(seed)
 
-    if reference_a_dbm is not None:
-        rssi_df["initial_signal_strength_dbm"] = float(reference_a_dbm)
+    freq_col = "initial_freq_mhz" if "initial_freq_mhz" in rssi_df.columns else "freq_mhz"
+    rssi_df["initial_signal_strength_dbm"] = _reference_rssi_dbm_from_freq(
+        freq_mhz=rssi_df[freq_col],
+        tx_power_dbm=tx_power_dbm,
+        reference_distance_m=reference_distance_m,
+    )
 
     # Shadowing is modelled as zero-mean Gaussian noise in the log-domain with scenario-specific sigma.
     rssi_df["shadow_noise_db"] = np_rng.normal(
@@ -239,16 +287,16 @@ def main() -> None:
         help="Optional seed for reproducible n/sigma/noise sampling.",
     )
     parser.add_argument(
-        "--reference-a-dbm",
+        "--tx-power-dbm",
         type=float,
-        default=None,
-        help="Optional fixed A reference RSSI in dBm at d0. Default: sampled per scenario.",
+        default=0.0,
+        help="Transmit power in dBm used to compute A at d0 from channel frequency.",
     )
     parser.add_argument(
         "--reference-distance-m",
         type=float,
         default=1.0,
-        help="Reference distance d0 in meters (default: 1.0).",
+        help="Reference distance d0 in meters used for A and path-loss terms.",
     )
     parser.add_argument(
         "--output",
@@ -274,7 +322,7 @@ def main() -> None:
     rssi_df = build_rssi_base_table(
         data_dir=data_dir,
         seed=args.seed,
-        reference_a_dbm=args.reference_a_dbm,
+        tx_power_dbm=args.tx_power_dbm,
         reference_distance_m=args.reference_distance_m,
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
