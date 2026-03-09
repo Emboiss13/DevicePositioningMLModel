@@ -15,7 +15,7 @@ from environment_factory import Environment
 This module includes attributes and methods to generate obstacles given environment conditions.
 
 Requirements: 
-- Walls, humans and stairs have to be separatedfrom each other (cannot have walls right next to one another) min-2m and max-10m.
+- Human-human and structural-structural spacing must be at least 2m.
 - There is a max occupied area for obstacles vs free space in the environment. 
 
 """
@@ -41,10 +41,6 @@ def currently_occupied_obstacle_area_is_valid(currently_occupied_obstacle_area: 
 # Max occupied area = 70%
 def allowed_obstacle_area() -> float:
     return random.uniform(0.1, 0.7)
-
-
-def clamp(v: float, lo: float, hi: float) -> float:
-    return max(lo, min(hi, v))
 
 
 # Generate a random point ensuring the shape of size (dx, dy) fully fits the bounds
@@ -78,8 +74,12 @@ class Obstacle:
 
 
 class ObstacleFactory:
-    _STRUCTURAL_MIN_SEPARATION_M = 2.0
-    _STRUCTURAL_MAX_SEPARATION_M = 10.0
+    _MIN_OBSTACLE_SEPARATION_M = 2.0
+    _TYPE_SELECTION_WEIGHT = {
+        ObstacleType.HUMAN: 0.70,
+        ObstacleType.WALL: 0.20,
+        ObstacleType.STAIRS: 0.10,
+    }
 
     def __init__(self, env: Environment) -> None:
         
@@ -90,6 +90,13 @@ class ObstacleFactory:
 
         self.allowed_obstacle_area = env.grid_area * allowed_obstacle_area()
         self.currently_occupied_obstacle_area = 0.0
+        self._count_by_type = {t: 0 for t in ObstacleType}
+        base_span = min(self.env.width, self.env.height)
+        self._max_count_by_type = {
+            ObstacleType.HUMAN: 10**9,
+            ObstacleType.WALL: max(2, int(base_span / 12.0)),
+            ObstacleType.STAIRS: max(1, int(base_span / 25.0)),
+        }
 
         self._placed: List[Obstacle] = []
 
@@ -136,15 +143,6 @@ class ObstacleFactory:
         miny, maxy = (y0, y1) if y0 <= y1 else (y1, y0)
         return minx, maxx, miny, maxy
 
-    def _rect_overlaps_rect(
-        self,
-        r1: Tuple[float, float, float, float],
-        r2: Tuple[float, float, float, float],
-    ) -> bool:
-        minx1, maxx1, miny1, maxy1 = r1
-        minx2, maxx2, miny2, maxy2 = r2
-        return not (maxx1 <= minx2 or maxx2 <= minx1 or maxy1 <= miny2 or maxy2 <= miny1)
-
     def _rect_edge_distance(
         self,
         r1: Tuple[float, float, float, float],
@@ -156,86 +154,101 @@ class ObstacleFactory:
         dy = max(miny2 - maxy1, miny1 - maxy2, 0.0)
         return math.sqrt(dx * dx + dy * dy)
 
-    def _is_structural(self, obstacle: Obstacle) -> bool:
-        return obstacle.obstacle_type in {ObstacleType.WALL, ObstacleType.STAIRS}
-
-    def _violates_structural_spacing(self, candidate: Obstacle, existing: Obstacle) -> bool:
-        if not self._is_structural(candidate) or not self._is_structural(existing):
-            return False
-
-        if not candidate.position_X1_Y1 or not existing.position_X1_Y1:
-            return True
-
-        candidate_rect = self._rect_bounds_from_points(candidate.position_X_Y, candidate.position_X1_Y1)
-        existing_rect = self._rect_bounds_from_points(existing.position_X_Y, existing.position_X1_Y1)
-        spacing = self._rect_edge_distance(candidate_rect, existing_rect)
-        return not (self._STRUCTURAL_MIN_SEPARATION_M <= spacing <= self._STRUCTURAL_MAX_SEPARATION_M)
-
-    def _circle_overlaps_circle(
+    def _circle_edge_distance(
         self,
         c1: Tuple[float, float],
         r1: float,
         c2: Tuple[float, float],
         r2: float,
-    ) -> bool:
+    ) -> float:
         dx = c1[0] - c2[0]
         dy = c1[1] - c2[1]
-        return dx * dx + dy * dy <= (r1 + r2) ** 2
+        center_distance = math.sqrt(dx * dx + dy * dy)
+        return center_distance - (r1 + r2)
 
-    def _circle_overlaps_rect(
+    def _circle_rect_edge_distance(
         self,
         center: Tuple[float, float],
         radius: float,
         rect: Tuple[float, float, float, float],
-    ) -> bool:
+    ) -> float:
         minx, maxx, miny, maxy = rect
         cx, cy = center
-        # Closest point in the rectangle to the circle center
-        closest_x = clamp(cx, minx, maxx)
-        closest_y = clamp(cy, miny, maxy)
-        dx = cx - closest_x
-        dy = cy - closest_y
-        return dx * dx + dy * dy <= radius * radius
+        dx = max(minx - cx, 0.0, cx - maxx)
+        dy = max(miny - cy, 0.0, cy - maxy)
+        return math.sqrt(dx * dx + dy * dy) - radius
+
+    def _edge_distance_between(self, candidate: Obstacle, existing: Obstacle) -> float:
+        if candidate.radius is not None and existing.radius is not None:
+            return self._circle_edge_distance(
+                candidate.position_X_Y,
+                candidate.radius,
+                existing.position_X_Y,
+                existing.radius,
+            )
+
+        if candidate.position_X1_Y1 and existing.position_X1_Y1:
+            candidate_rect = self._rect_bounds_from_points(candidate.position_X_Y, candidate.position_X1_Y1)
+            existing_rect = self._rect_bounds_from_points(existing.position_X_Y, existing.position_X1_Y1)
+            return self._rect_edge_distance(candidate_rect, existing_rect)
+
+        circ = candidate if candidate.radius is not None else existing
+        rect_ob = existing if candidate.radius is not None else candidate
+        rect_bounds = self._rect_bounds_from_points(rect_ob.position_X_Y, rect_ob.position_X1_Y1)  # type: ignore[arg-type]
+        return self._circle_rect_edge_distance(circ.position_X_Y, circ.radius, rect_bounds)  # type: ignore[arg-type]
+
+    def _is_structural(self, obstacle: Obstacle) -> bool:
+        return obstacle.obstacle_type in {ObstacleType.WALL, ObstacleType.STAIRS}
+
+    def _required_spacing(self, candidate: Obstacle, existing: Obstacle) -> float:
+        if candidate.obstacle_type == ObstacleType.HUMAN and existing.obstacle_type == ObstacleType.HUMAN:
+            return self._MIN_OBSTACLE_SEPARATION_M
+        if self._is_structural(candidate) and self._is_structural(existing):
+            return self._MIN_OBSTACLE_SEPARATION_M
+        return 0.0
 
     def _overlaps_existing(self, candidate: Obstacle) -> bool:
         for ob in self._placed:
-            if self._violates_structural_spacing(candidate, ob):
+            if self._edge_distance_between(candidate, ob) < self._required_spacing(candidate, ob):
                 return True
-
-            # both circles
-            if candidate.radius is not None and ob.radius is not None:
-                if self._circle_overlaps_circle(candidate.position_X_Y, candidate.radius, ob.position_X_Y, ob.radius):
-                    return True
-            # both rects
-            elif candidate.position_X1_Y1 and ob.position_X1_Y1:
-                rect1 = self._rect_bounds_from_points(candidate.position_X_Y, candidate.position_X1_Y1)
-                rect2 = self._rect_bounds_from_points(ob.position_X_Y, ob.position_X1_Y1)
-                if self._rect_overlaps_rect(rect1, rect2):
-                    return True
-            # circle vs rect
-            else:
-                circ = candidate if candidate.radius is not None else ob
-                rect_ob = ob if candidate.radius is not None else candidate
-                rect_bounds = self._rect_bounds_from_points(rect_ob.position_X_Y, rect_ob.position_X1_Y1)  # type: ignore[arg-type]
-                if self._circle_overlaps_rect(circ.position_X_Y, circ.radius, rect_bounds):  # type: ignore[arg-type]
-                    return True
         return False
 
     def _record(self, obstacle: Obstacle) -> Obstacle:
         self._placed.append(obstacle)
         self.currently_occupied_obstacle_area += obstacle.area
+        self._count_by_type[obstacle.obstacle_type] += 1
         return obstacle
 
-    def _build_obstacle_label(self, obstacle_type: ObstacleType, obstacle_id: str) -> str:
+    def _candidate_types(self) -> List[ObstacleType]:
+        remaining_area = self._remaining_area()
+        fit_types = [
+            t
+            for t in ObstacleType
+            if remaining_area >= self._min_area_for_type(t)
+            and self._count_by_type[t] < self._max_count_by_type[t]
+        ]
+        if not fit_types:
+            return []
+
+        ordered_types: List[ObstacleType] = []
+        pool = fit_types.copy()
+        while pool:
+            weights = [self._TYPE_SELECTION_WEIGHT[t] for t in pool]
+            selected = random.choices(pool, weights=weights, k=1)[0]
+            ordered_types.append(selected)
+            pool.remove(selected)
+        return ordered_types
+
+    def _build_obstacle_label(self, obstacle_type: ObstacleType, obstacle_id: int) -> str:
         return f"{obstacle_type.value}_{obstacle_id}"
 
     def create_obstacle(self) -> Obstacle:
         if not self.can_fit_any_obstacle():
             raise RuntimeError("No obstacle can fit in the remaining allowed area.")
 
-        # Try each type once in random order
-        obstacle_types = list(ObstacleType)
-        random.shuffle(obstacle_types)
+        obstacle_types = self._candidate_types()
+        if not obstacle_types:
+            raise RuntimeError("No obstacle type can fit in remaining area.")
 
         for obstacle_type in obstacle_types:
             # Position retry loop to avoid overlaps without an infinite loop
