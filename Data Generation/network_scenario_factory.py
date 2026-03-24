@@ -1,32 +1,34 @@
+"""
+NETWORK ENVIRONMENT SCENARIO FACTORY
+------------------------------------
+
+This module defines the core data structures and random generation logic for our network scenarios, including:
+
+- Environment
+- Floorplan
+- Antennas
+- Humans
+
+@author: Giuliana Emberson
+@date: 7th of May 2026
+
+"""
+
+
 from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 import random
 from antenna_factory import Antenna, AntennaFactory
-from obstacle_factory import Obstacle, ObstacleFactory
 from environment_factory import Environment
-
-
-"""
-
-🛜 NETWORK ENVIRONMENT SCENARIO FACTORY 📍
-------------------------------------------
-
-This module defines the core data structures and random generation logic for our network scenarios, including:
-
-- Environment
-- Antennas
-- Obstacles
-
-"""
-
+from human_factory import Human, HumanFactory
 
 
 @dataclass
 class NetworkScenario:
     environment: Environment
     antennas: List[Antenna]                   # E.g. {antenna_1: {position: [3,4], radius: 3, covered_space: {total_area: 7, covered_coordinates: [[0,6], [1,7]]}}}
-    obstacles: List[Obstacle]                 # E.g. {obstacle_1: {position: [3,4], hight: 2, length: 45, covered_space: {total_area: 7, covered_coordinates: [[0,6], [1,7]]}}}
+    humans: List[Human]                       # E.g. {human_1: {position: [3,4], height: 2, length: 45, covered_space: {total_area: 7, covered_coordinates: [[0,6], [1,7]]}}}
     #targets: List[Targets]                 
 
     @classmethod
@@ -40,23 +42,23 @@ class NetworkScenario:
 
         env = Environment()
 
-        # ---- Antennas
+        # Antennas
         antenna_factory = AntennaFactory(env)
         antennas: List[Antenna] = []
 
         while antenna_factory.has_capacity():
             antennas.append(antenna_factory.create_antenna())
 
-        # ---- Obstacles
-        obstacle_factory = ObstacleFactory(env)
-        obstacles: List[Obstacle] = []
+        # Humans
+        human_factory = HumanFactory(env)
+        humans: List[Human] = []
         failed_draws = 0
         max_failed_draws = 50  # safety only
 
-        while obstacle_factory.can_fit_any_obstacle():
+        while human_factory.can_fit_any_human():
             try:
-                obstacle = obstacle_factory.create_obstacle()
-                obstacles.append(obstacle)
+                human = human_factory.create_human()
+                humans.append(human)
                 failed_draws = 0  # reset after success
             except RuntimeError:
                 failed_draws += 1
@@ -66,17 +68,18 @@ class NetworkScenario:
         return cls(
             environment=env,
             antennas=antennas,
-            obstacles=obstacles,
+            humans=humans,
         )
 
     def to_dict(self) -> Dict[str, Any]:
         """
-        JSON-style formatting for generated data.
+        JSON-style formatting for generated data
         """
         env = {
             "width": self.environment.width,
             "height": self.environment.height,
-            "grid_area": self.environment.grid_area,
+            "area": self.environment.area,
+            "env_type": self.environment.env_type,
             "x_domain": self.environment.x_domain,
             "y_range": self.environment.y_range,
         }
@@ -85,14 +88,13 @@ class NetworkScenario:
         for antenna in self.antennas:
             antennas.append(asdict(antenna))
 
-        obstacles = []
-        for obstacle in self.obstacles:
-            obstacle_dict = asdict(obstacle)
-            obstacle_dict["obstacle_type"] = obstacle.obstacle_type.value
-            obstacles.append(obstacle_dict)
+        humans = []
+        for human in self.humans:
+            human_dict = asdict(human)
+            humans.append(human_dict)
 
         return {
             "environment": env,
             "antennas": antennas,
-            "obstacles": obstacles,
+            "humans": humans,
         }

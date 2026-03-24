@@ -1,3 +1,5 @@
+from typing import Tuple, List, Optional
+from human_factory import Human
 from matplotlib.pylab import Enum
 
 """
@@ -82,21 +84,21 @@ def _segment_intersects_circle(
     return euclidean_distance(closest, center) <= radius
 
 
-def obstacles_blocking_count(
+def humans_blocking_count(
     a: Tuple[float, float],
     b: Tuple[float, float],
-    obstacles: List[Obstacle],
+    humans: List[Human],
 ) -> int:
     count = 0
-    for ob in obstacles:
-        if ob.obstacle_type == ObstacleType.HUMAN and ob.radius is not None:
-            if _segment_intersects_circle(a, b, ob.position_X_Y, ob.radius):
+    for human in humans:
+        if human.radius is not None:
+            if _segment_intersects_circle(a, b, human.position_X_Y, human.radius):
                 count += 1
         else:
-            if ob.position_X1_Y1 is None:
+            if human.position_X1_Y1 is None:
                 continue
-            x0, y0 = ob.position_X_Y
-            x1, y1 = ob.position_X1_Y1
+            x0, y0 = human.position_X_Y
+            x1, y1 = human.position_X1_Y1
             minx, maxx = (x0, x1) if x0 <= x1 else (x1, x0)
             miny, maxy = (y0, y1) if y0 <= y1 else (y1, y0)
             if _segment_intersects_aabb(a, b, minx, miny, maxx, maxy):
@@ -111,7 +113,7 @@ class Channel:
     device_b_id: str
     device_b_position: Tuple[float, float]
     distance_m: float
-    blocking_obstacles: int
+    blocking_humans: int
 
 
 class ChannelFactory:
@@ -120,19 +122,19 @@ class ChannelFactory:
 
     NOTE:
     - INDOOR_LOS = minimum of 1 completely free channel
-    - INDOOR_NLOS = not allowed to have any free channels (all must have at least 1 obstacle)
+    - INDOOR_NLOS = not allowed to have any free channels (all must have at least 1 human)
     """
     def __init__(
         self,
         env: Environment,
-        obstacles: List[Obstacle],
+        humans: List[Human],
     ) -> None:
         self.env = env
-        self.obstacles = obstacles
+        self.humans = humans
 
     def _make_channel(self, a: Device, b: Device) -> Channel:
         d = euclidean_distance(a.position, b.position)
-        blocks = obstacles_blocking_count(a.position, b.position, self.obstacles)
+        blocks = humans_blocking_count(a.position, b.position, self.humans)
 
         return Channel(
             device_a_id=a.device_id,
@@ -140,7 +142,7 @@ class ChannelFactory:
             device_b_id=b.device_id,
             device_b_position=b.position,
             distance_m=d,
-            blocking_obstacles=blocks,
+            blocking_humans=blocks,
         )
 
     def build_channels(self, devices: List[Device]) -> List[Channel]:
@@ -165,22 +167,22 @@ class ChannelFactory:
 def channels_meet_env_constraints(env_type: EnvironmentType, channels: List[Channel]) -> bool:
     """
     Enforce per-environment LOS/NLOS rules:
-    - OUTDOOR: at least 80% of channels must have 0 blocking obstacles (completely free).
-    - INDOOR_LOS: at least one channel must have 0 blocking obstacles (completely free).
+    - OUTDOOR: at least 80% of channels must have 0 blocking humans (completely free).
+    - INDOOR_LOS: at least one channel must have 0 blocking humans (completely free).
     - INDOOR_NLOS: no channel may be completely free (each must have >=1 blocker).
     """
     if not channels:
         return True  # nothing to validate
 
     if env_type == EnvironmentType.OUTDOOR:
-        free = sum(1 for ch in channels if ch.blocking_obstacles == 0)
+        free = sum(1 for ch in channels if ch.blocking_humans == 0)
         return free / len(channels) >= 0.80
 
     if env_type == EnvironmentType.INDOOR_LOS:
-        return any(ch.blocking_obstacles == 0 for ch in channels)
+        return any(ch.blocking_humans == 0 for ch in channels)
 
     if env_type == EnvironmentType.INDOOR_NLOS:
-        return all(ch.blocking_obstacles >= 1 for ch in channels)
+        return all(ch.blocking_humans >= 1 for ch in channels)
 
     return True
 
@@ -201,42 +203,42 @@ def _device_pairs_for_channels(devices: List[Device]) -> List[Tuple[Device, Devi
 
 # This is probably not the most efficient way of doing this but it id good enough for now
 # Could be optimised and improved in the future
-def remove_blocking_obstacles_for_outdoor(
-    env_type: EnvironmentType, obstacles: List[Obstacle], devices: List[Device], *, target_free_ratio: float = 0.80
-) -> List[Obstacle]:
+def remove_blocking_humans_for_outdoor(
+    env_type: EnvironmentType, humans: List[Human], devices: List[Device], *, target_free_ratio: float = 0.80
+) -> List[Human]:
     """
-    For OUTDOOR envs, greedily remove obstacles that block the most pairs until the fraction of free channels reaches the target ratio.
+    For OUTDOOR envs, greedily remove humans that block the most pairs until the fraction of free channels reaches the target ratio.
     """
-    if env_type != EnvironmentType.OUTDOOR or not obstacles or len(devices) < 2:
-        return obstacles
+    if env_type != EnvironmentType.OUTDOOR or not humans or len(devices) < 2:
+        return humans
 
     pairs = _device_pairs_for_channels(devices)
-    kept = list(obstacles)
+    kept = list(humans)
 
-    def free_ratio(current_obstacles: List[Obstacle]) -> float:
+    def free_ratio(current_humans: List[Human]) -> float:
         if not pairs:
             return 1.0
         blocked = 0
         for a, b in pairs:
-            if obstacles_blocking_count(a.position, b.position, current_obstacles) > 0:
+            if humans_blocking_count(a.position, b.position, current_humans) > 0:
                 blocked += 1
         return 1 - (blocked / len(pairs))
 
-    # Remove worst-offending obstacle until we meet target or nothing blocks
-    for _ in range(len(obstacles)):
+    # Remove worst-offending human until we meet target or nothing blocks
+    for _ in range(len(humans)):
         if free_ratio(kept) >= target_free_ratio:
             break
 
-        # score obstacles by how many pairs they alone block
+        # score humans by how many pairs they alone block
         scores = []
-        for ob in kept:
+        for human in kept:
             blocked_pairs = 0
             for a, b in pairs:
-                if obstacles_blocking_count(a.position, b.position, [ob]) > 0:
+                if humans_blocking_count(a.position, b.position, [human]) > 0:
                     blocked_pairs += 1
-            scores.append((blocked_pairs, ob))
+            scores.append((blocked_pairs, human))
 
-        # pick obstacle that blocks the most pairs; if none block, stop
+        # pick human that blocks the most pairs; if none block, stop
         scores.sort(key=lambda t: t[0], reverse=True)
         if scores and scores[0][0] > 0:
             kept.remove(scores[0][1])
@@ -246,36 +248,36 @@ def remove_blocking_obstacles_for_outdoor(
     return kept
 
 
-def remove_blocking_obstacles_for_indoor_los(
-    env_type: EnvironmentType, obstacles: List[Obstacle], devices: List[Device]
-) -> List[Obstacle]:
+def remove_blocking_humans_for_indoor_los(
+    env_type: EnvironmentType, humans: List[Human], devices: List[Device]
+) -> List[Human]:
     """
     For INDOOR_LOS envs, ensure at least one channel can be completely free by
-    removing the minimum blockers for a device pair.
+    removing the minimum human blockers for a device pair.
     """
-    if env_type != EnvironmentType.INDOOR_LOS or not obstacles or len(devices) < 2:
-        return obstacles
+    if env_type != EnvironmentType.INDOOR_LOS or not humans or len(devices) < 2:
+        return humans
 
     pairs = _device_pairs_for_channels(devices)
     if not pairs:
-        return obstacles
+        return humans
 
-    kept = list(obstacles)
+    kept = list(humans)
 
     # If already valid, keep as-is.
     for a, b in pairs:
-        if obstacles_blocking_count(a.position, b.position, kept) == 0:
+        if humans_blocking_count(a.position, b.position, kept) == 0:
             return kept
 
     # Choose the pair with the fewest blockers and remove only those blockers.
     best_pair: Optional[Tuple[Device, Device]] = None
-    best_blockers: Optional[List[Obstacle]] = None
+    best_blockers: Optional[List[Human]] = None
 
     for a, b in pairs:
-        blockers: List[Obstacle] = []
-        for ob in kept:
-            if obstacles_blocking_count(a.position, b.position, [ob]) > 0:
-                blockers.append(ob)
+        blockers: List[Human] = []
+        for human in kept:
+            if humans_blocking_count(a.position, b.position, [human]) > 0:
+                blockers.append(human)
 
         if best_blockers is None or len(blockers) < len(best_blockers):
             best_pair = (a, b)

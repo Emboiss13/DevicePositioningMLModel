@@ -1,25 +1,55 @@
+"""
+ANTENNA FACTORY
+---------------
+
+This module defines the attributes and helper methods used to generate Clear-Com FreeSpeak Edge transceiver antennas for synthetic network scenarios.
+
+Generation assumptions:
+- Antennas should be distributed across the environment to provide broad coverage.
+- Antenna placement should account for realistic 5 GHz propagation behaviour.
+- Antennas should be sufficiently separated to reduce excessive overlap while still covering the intended area.
+- Coverage radius may be sampled within realistic ranges instead of being derived from first principles.
+
+Hardware constraints (based on Clear-Com FreeSpeak Edge FSE-TCVR-50-IP):
+- Antenna / transceiver type: External omnidirectional 5 GHz transceiver antenna 
+- Frequency spectrum: 5170-5875 MHz 
+- Channel width: 20 MHz
+- Modulation: OFDM
+- Antenna gain: 3 dB omni
+- Output power: Adjustable from 1 to 24 dBm
+- Dimensions without bracket (W x H x D): 193.04 x 209.6 x 85.6 mm
+- Dimensions with bracket (W x H x D): 193.04 x 209.6 x 104.65 mm
+
+Practical coverage guidance from datasheet:
+- Outdoor LOS coverage: 160-230 m
+- Indoor coverage: 80-107 m
+- Reflective surfaces increase coverage distance
+
+NOTE:
+- FreeSpeak Edge operates in the 5 GHz spectrum but is not standard Wi-Fi.
+- Depending on region, the 5 GHz band provides 25+ non-overlapping channels.
+- For simulation, antenna radius can be randomly selected within realistic deployment bounds consistent with the datasheet and scenario type.
+
+
+Antenna generation pseudocode: 
+1) Randomly chose if we are creating a Outdoor scenario or Indoor one. 
+2) Based on environment type set range. 
+3) Randomly select a fixed antenna coverage given the environment type coverage range. 
+4) Generate antennas by evenly spacing them out in the area based on their coverage range, so no part of the map is left uncovered. 
+
+
+@author: Giuliana Emberson
+@date: 7th of May 2026
+
+"""
+
+
 from __future__ import annotations
 from dataclasses import dataclass
 import math
+import random
 from typing import List, Tuple
 from environment_factory import Environment
-
-
-"""
-
-📡 ANTENNA FACTORY 📡
-----------------------
-
-This module includes attributes and methods to generate antennas given environment conditions.
-
-Requirements:
-- Antennas must be evenly distributed in the environment.
-- Antenna coverage range must cover all areas of the map.
-- Antennas must be separated from one another to minimise the amount of antennas needed
-  to cover the whole map and maximise the ratio of coverage per antenna.
-  
-"""
-
 
 
 def generate_id(counter: int, prefix: str) -> str:
@@ -28,80 +58,65 @@ def generate_id(counter: int, prefix: str) -> str:
 
 @dataclass
 class Antenna:
-    antenna_id: int
-    antenna_label: str
-    position: Tuple[float, float]
-    coverage_radius: float
+    antenna_id: int                          # unique numeric ID
+    antenna_label: str                       # antenna label (for plotting/visualisation)
+    position: Tuple[float, float]            # (x,y) coordinates
+    coverage_radius: float                   # same for all antennas in that scenario
 
 
 class AntennaFactory:
-    # Upper/lower practical bounds for a single antenna coverage radius (meters).
-    # We need to change this so that we calculate the antenna coverage based on the gain and power
-    _MIN_COVERAGE_RADIUS_M = 5.0
-    _MAX_COVERAGE_RADIUS_M = 20.0
+    # Coverage ranges based on typical 5Ghz FSE-TCVR-50-IP FreeSpeak Edge coverage documentation.
+    _OUTDOOR_COVERAGE_RANGE_M = (160.0, 230.0)
+    _INDOOR_COVERAGE_RANGE_M = (80.0, 107.0)
 
     def __init__(self, env: Environment) -> None:
         self.env = env
-        self.x_domain = env.x_domain
-        self.y_range = env.y_range
-        self.width = env.width
-        self.height = env.height
+        self.env_x_domain = env.x_domain
+        self.env_y_range = env.y_range
+        self.env_width = env.width
+        self.env_height = env.height
 
         self.antenna_counter = 0
-        self.antenna_area = 0.2 * 2  # m^2
-        self.currently_occupied_antenna_area = 0.0
 
         rows, cols, radius = self._coverage_grid_plan()
         self.coverage_radius = radius
         self._planned_positions = self._grid_positions(rows, cols)
         self._planned_count = len(self._planned_positions)
 
-        # Cap exactly at the planned coverage-complete deployment.
-        self.allowed_antenna_area = self._planned_count * self.antenna_area
-
-    def _required_radius_for_grid(self, rows: int, cols: int) -> float:
-        cell_w = self.width / cols
-        cell_h = self.height / rows
-        # Radius needed so each cell corner is still covered by its cell-center antenna.
-        return 0.5 * math.sqrt(cell_w * cell_w + cell_h * cell_h)
-
     def _coverage_grid_plan(self) -> Tuple[int, int, float]:
-        # Find minimum antennas (rows*cols) that can still satisfy max coverage radius.
-        # Ties are broken by choosing bigger required radius (less overlap, better ratio/antenna).
-        best_rows = 0
-        best_cols = 0
-        best_required_radius = 0.0
-        best_count: int | None = None
+        """Plan antenna placement so that the full environment is covered.
 
-        max_dim = max(2, int(math.ceil(max(self.width, self.height))))
-        for rows in range(1, max_dim + 1):
-            for cols in range(1, max_dim + 1):
-                required_radius = self._required_radius_for_grid(rows, cols)
-                if required_radius > self._MAX_COVERAGE_RADIUS_M:
-                    continue
+        1) Use the scenario environment type to determine whether coverage is indoor or outdoor.
+        2) Select a fixed antenna coverage radius within the corresponding range.
+        3) Compute a grid size that ensures no part of the map is left uncovered.
+        """
+        env_type = getattr(self.env, "env_type", None)
+        if env_type not in {"indoor", "outdoor"}:
+            env_type = random.choice(["indoor", "outdoor"])
 
-                count = rows * cols
-                is_better_count = best_count is None or count < best_count
-                is_better_overlap = best_count is not None and count == best_count and required_radius > best_required_radius
-                if is_better_count or is_better_overlap:
-                    best_rows = rows
-                    best_cols = cols
-                    best_required_radius = required_radius
-                    best_count = count
+        self.environment_type = env_type
+        self.is_outdoor = env_type == "outdoor"
 
-        if best_count is None:
-            # Fallback: derive a guaranteed-feasible grid directly from max radius.
-            max_cell_side = self._MAX_COVERAGE_RADIUS_M * math.sqrt(2.0)
-            best_cols = max(1, math.ceil(self.width / max_cell_side))
-            best_rows = max(1, math.ceil(self.height / max_cell_side))
-            best_required_radius = self._required_radius_for_grid(best_rows, best_cols)
+        min_radius, max_radius = (
+            self._OUTDOOR_COVERAGE_RANGE_M
+            if self.is_outdoor
+            else self._INDOOR_COVERAGE_RANGE_M
+        )
+        radius = random.uniform(min_radius, max_radius)
 
-        radius = max(self._MIN_COVERAGE_RADIUS_M, best_required_radius)
-        return best_rows, best_cols, radius
+        # For a given antenna radius, the maximum square cell side that can be fully
+        # covered from its center is radius * sqrt(2). Choosing this cell size ensures
+        # coverage even when the grid is non-square.
+        max_cell_side = radius * math.sqrt(2.0)
+
+        cols = max(1, math.ceil(self.env_width / max_cell_side))
+        rows = max(1, math.ceil(self.env_height / max_cell_side))
+
+        return rows, cols, radius
 
     def _grid_positions(self, rows: int, cols: int) -> List[Tuple[float, float]]:
-        x0, x1 = self.x_domain
-        y0, y1 = self.y_range
+        x0, x1 = self.env_x_domain
+        y0, y1 = self.env_y_range
         cell_w = (x1 - x0) / cols
         cell_h = (y1 - y0) / rows
 
@@ -113,6 +128,14 @@ class AntennaFactory:
                 positions.append((x, y))
         return positions
 
+    def get_antenna_positions(self) -> List[Tuple[float, float]]:
+        """Return a stable list of antenna coordinates for this scenario.
+
+        This allows downstream processing (e.g., RSSI/TDOA/AOA calculations)
+        to use the exact same antenna layout without recomputing the grid.
+        """
+        return list(self._planned_positions)
+
     def has_capacity(self) -> bool:
         return self.antenna_counter < self._planned_count
 
@@ -120,16 +143,11 @@ class AntennaFactory:
         if not self.has_capacity():
             raise RuntimeError("Full-map coverage plan already reached.")
 
-        projected_area = self.currently_occupied_antenna_area + self.antenna_area
-        if projected_area > self.allowed_antenna_area + 1e-9:
-            raise ValueError("Exceeded maximum allowed area for antennas")
-
         antenna_id = self.antenna_counter
         antenna_label = generate_id(antenna_id, "antenna")
         position = self._planned_positions[antenna_id]
 
         self.antenna_counter += 1
-        self.currently_occupied_antenna_area = min(projected_area, self.allowed_antenna_area)
 
         return Antenna(
             antenna_id=antenna_id,
