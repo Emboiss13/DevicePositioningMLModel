@@ -6,6 +6,7 @@ USAGE EXAMPLES:
 python3 create_network_envs.py --count 5
 python3 create_network_envs.py --count 10 --seed 2
 python3 create_network_envs.py --count 1 --output-dir generated_network_scenarios --plot
+python3 'Data Generation/create_network_envs.py' --count 1 --seed 7 --output-dir '/tmp/generated_network_scenarios_target_plot' --target-plot
 
 NOTE: DONT FORGET to add a clutter area fraction data point (based on the amount of clutter in a room)
 
@@ -53,6 +54,7 @@ def summarize_scenario(
     scenario_id: str,
     scenario: NetworkScenario,
     floor_plan_summary: Optional[Dict[str, Any]] = None,
+    target_summary: Optional[Dict[str, Any]] = None,
     timing_summary: Optional[Dict[str, float]] = None,
 ) -> None:
     scenario_dict = scenario.to_dict()
@@ -75,6 +77,11 @@ def summarize_scenario(
         print(
             "rooms:", floor_plan_summary["room_count"],
             "patios:", floor_plan_summary["patio_count"],
+        )
+    if target_summary is not None:
+        print(
+            "targets:", target_summary["target_count"],
+            "valid_cells:", target_summary["valid_cell_count"],
         )
     if timing_summary is not None:
         print(
@@ -294,6 +301,65 @@ def plot_overlay_scenario(
         return None
 
 
+def plot_target_grid_scenario(
+    scenario_id: str,
+    scenario: NetworkScenario,
+    floor_plan: GeneratedFloorPlan,
+    target_summary: Dict[str, Any],
+    out_dir: Path,
+) -> Optional[str]:
+    """
+    Render a dedicated target-grid diagnostic plot.
+    """
+    try:
+        plt = _get_pyplot()
+        scenario_dict = scenario.to_dict()
+        fig, ax = plt.subplots(figsize=_overlay_figure_size(scenario_dict))
+        _setup_scenario_axis(ax, scenario_id, scenario, title_suffix="target grid")
+        _draw_floor_plan(ax, floor_plan)
+
+        valid_cells = [row for row in target_summary["grid_cell_rows"] if row["is_valid"]]
+        invalid_cells = [row for row in target_summary["grid_cell_rows"] if not row["is_valid"]]
+
+        if invalid_cells:
+            ax.scatter(
+                [row["x_center"] for row in invalid_cells],
+                [row["y_center"] for row in invalid_cells],
+                color="tab:gray",
+                s=4,
+                alpha=0.12,
+                marker="s",
+                label="invalid cell",
+                zorder=2,
+            )
+
+        if valid_cells:
+            ax.scatter(
+                [row["x_center"] for row in valid_cells],
+                [row["y_center"] for row in valid_cells],
+                color="tab:green",
+                s=5,
+                alpha=0.55,
+                marker="s",
+                label="valid cell",
+                zorder=3,
+            )
+
+        _draw_antennas(ax, scenario_dict["antennas"])
+        _finalize_legend(ax)
+
+        plots_dir = out_dir / "plots"
+        plots_dir.mkdir(parents=True, exist_ok=True)
+        png_path = plots_dir / f"{scenario_id}_target_grid.png"
+        fig.tight_layout()
+        fig.savefig(png_path, dpi=PLOT_DPI, bbox_inches="tight")
+        plt.close(fig)
+        return str(png_path.relative_to(out_dir))
+    except Exception:
+        plt.close("all")
+        return None
+
+
 def generate_floor_plan_artifacts(
     scenario_id: str,
     seed: Optional[int],
@@ -334,13 +400,51 @@ def generate_floor_plan_artifacts(
     }
 
 
+def generate_target_artifacts(
+    scenario_id: str,
+    seed: Optional[int],
+    scenario: NetworkScenario,
+    floor_plan_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    generated_grid = scenario.populate_targets_from_floor_plan(floor_plan_summary["plan"])
+
+    grid_cell_rows: List[Dict[str, Any]] = []
+    for cell in generated_grid.cells:
+        row = asdict(cell)
+        row["scenario_id"] = scenario_id
+        row["seed"] = seed
+        grid_cell_rows.append(row)
+
+    target_rows: List[Dict[str, Any]] = []
+    for target in generated_grid.targets:
+        row = asdict(target)
+        row["scenario_id"] = scenario_id
+        row["seed"] = seed
+        target_rows.append(row)
+
+    return {
+        "rows": generated_grid.rows,
+        "cols": generated_grid.cols,
+        "requested_max_cell_size": generated_grid.requested_max_cell_size,
+        "cell_width": generated_grid.cell_width,
+        "cell_height": generated_grid.cell_height,
+        "grid_cell_count": len(generated_grid.cells),
+        "valid_cell_count": len(generated_grid.targets),
+        "target_count": len(generated_grid.targets),
+        "grid_cell_rows": grid_cell_rows,
+        "target_rows": target_rows,
+    }
+
+
 def scenario_to_rows(
     scenario_id: str,
     seed: Optional[int],
     scenario: NetworkScenario,
     plot_path: Optional[str],
     floor_plan_summary: Optional[Dict[str, Any]] = None,
+    target_summary: Optional[Dict[str, Any]] = None,
     overlay_plot_path: Optional[str] = None,
+    target_plot_path: Optional[str] = None,
     timing_summary: Optional[Dict[str, float]] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Flatten a scenario into row dictionaries for each table."""
@@ -362,12 +466,21 @@ def scenario_to_rows(
         "human_count": len(scenario_dict["humans"]),
         "plot_path": plot_path,
         "overlay_plot_path": overlay_plot_path,
+        "target_plot_path": target_plot_path,
         "floor_plan_yaml_path": floor_plan_summary["yaml_path"] if floor_plan_summary else None,
         "floor_plan_png_path": floor_plan_summary["png_path"] if floor_plan_summary else None,
         "floor_plan_parquet_path": floor_plan_summary["parquet_path"] if floor_plan_summary else None,
         "floor_plan_room_count": floor_plan_summary["room_count"] if floor_plan_summary else None,
         "floor_plan_patio_count": floor_plan_summary["patio_count"] if floor_plan_summary else None,
         "floor_plan_element_count": floor_plan_summary["element_count"] if floor_plan_summary else None,
+        "target_count": target_summary["target_count"] if target_summary else None,
+        "grid_cell_count": target_summary["grid_cell_count"] if target_summary else None,
+        "valid_grid_cell_count": target_summary["valid_cell_count"] if target_summary else None,
+        "target_grid_rows": target_summary["rows"] if target_summary else None,
+        "target_grid_cols": target_summary["cols"] if target_summary else None,
+        "target_requested_max_cell_size": target_summary["requested_max_cell_size"] if target_summary else None,
+        "target_cell_width": target_summary["cell_width"] if target_summary else None,
+        "target_cell_height": target_summary["cell_height"] if target_summary else None,
         "scenario_generation_seconds": timing_summary["scenario_generation_seconds"] if timing_summary else None,
         "environment_plot_seconds": timing_summary["environment_plot_seconds"] if timing_summary else None,
         "floor_plan_seconds": timing_summary["floor_plan_seconds"] if timing_summary else None,
@@ -454,6 +567,11 @@ def main() -> None:
         action="store_true",
         help="Render and save the standalone floor-plan PNG. If omitted, the YAML and parquet are still generated.",
     )
+    parser.add_argument(
+        "--target-plot",
+        action="store_true",
+        help="Render and save a dedicated target-grid PNG for each scenario.",
+    )
     args = parser.parse_args()
 
     base_seed = args.seed
@@ -465,6 +583,8 @@ def main() -> None:
     env_summary_rows: List[Dict[str, Any]] = []
     antenna_rows: List[Dict[str, Any]] = []
     human_rows: List[Dict[str, Any]] = []
+    target_rows: List[Dict[str, Any]] = []
+    grid_cell_rows: List[Dict[str, Any]] = []
     floor_plan_element_rows: List[Dict[str, Any]] = []
 
     for iteration in range(1, args.count + 1):
@@ -480,6 +600,7 @@ def main() -> None:
         if not args.no_save:
             plot_path = None
             overlay_plot_path = None
+            target_plot_path = None
             environment_plot_seconds = 0.0
             floor_plan_seconds = 0.0
             overlay_plot_seconds = 0.0
@@ -497,6 +618,12 @@ def main() -> None:
                 floor_plan_summary["plan"],
                 seed=scenario_seed,
             )
+            target_summary = generate_target_artifacts(
+                scenario_id,
+                scenario_seed,
+                network_scenario,
+                floor_plan_summary,
+            )
             if args.plot:
                 plot_start = time.perf_counter()
                 plot_path = plot_scenario(scenario_id, network_scenario, out_dir)
@@ -510,6 +637,14 @@ def main() -> None:
                     out_dir,
                 )
                 overlay_plot_seconds = time.perf_counter() - overlay_start
+            if args.target_plot:
+                target_plot_path = plot_target_grid_scenario(
+                    scenario_id,
+                    network_scenario,
+                    floor_plan_summary["plan"],
+                    target_summary,
+                    out_dir,
+                )
 
             timing_summary = {
                 "scenario_generation_seconds": scenario_generation_seconds,
@@ -525,18 +660,23 @@ def main() -> None:
                 network_scenario,
                 plot_path,
                 floor_plan_summary=floor_plan_summary,
+                target_summary=target_summary,
                 overlay_plot_path=overlay_plot_path,
+                target_plot_path=target_plot_path,
                 timing_summary=timing_summary,
             )
             summarize_scenario(
                 scenario_id,
                 network_scenario,
                 floor_plan_summary=floor_plan_summary,
+                target_summary=target_summary,
                 timing_summary=timing_summary,
             )
             env_summary_rows.extend(rows["env_summary"])
             antenna_rows.extend(rows["antennas"])
             human_rows.extend(rows["humans"])
+            target_rows.extend(target_summary["target_rows"])
+            grid_cell_rows.extend(target_summary["grid_cell_rows"])
             floor_plan_element_rows.extend(floor_plan_summary["element_rows"])
         else:
             floor_plan_start = time.perf_counter()
@@ -552,9 +692,14 @@ def main() -> None:
                     temp_plan,
                     seed=scenario_seed,
                 )
+                target_grid = network_scenario.populate_targets_from_floor_plan(temp_plan)
                 floor_plan_summary = {
                     "room_count": len(temp_plan.rooms),
                     "patio_count": len(temp_plan.patios),
+                }
+                target_summary = {
+                    "target_count": len(target_grid.targets),
+                    "valid_cell_count": len(target_grid.targets),
                 }
             floor_plan_seconds = time.perf_counter() - floor_plan_start
             timing_summary = {
@@ -568,6 +713,7 @@ def main() -> None:
                 scenario_id,
                 network_scenario,
                 floor_plan_summary=floor_plan_summary,
+                target_summary=target_summary,
                 timing_summary=timing_summary,
             )
 
@@ -575,6 +721,8 @@ def main() -> None:
         pd.DataFrame(env_summary_rows).to_parquet(out_dir / "env_summary.parquet", index=False)
         pd.DataFrame(antenna_rows).to_parquet(out_dir / "antennas.parquet", index=False)
         pd.DataFrame(human_rows).to_parquet(out_dir / "humans.parquet", index=False)
+        pd.DataFrame(target_rows).to_parquet(out_dir / "targets.parquet", index=False)
+        pd.DataFrame(grid_cell_rows).to_parquet(out_dir / "grid_cells.parquet", index=False)
         pd.DataFrame(floor_plan_element_rows).to_parquet(out_dir / "floor_plan_elements.parquet", index=False)
 
 
