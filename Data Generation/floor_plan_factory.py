@@ -161,6 +161,7 @@ class FloorPlanConfig:
     parquet_filename: str = "floor_plan_elements.parquet"
     png_dirname: str = "png"
     png_filename: str = "floor_plan.png"
+    render_png: bool = True
     dpi: int = 180
     scale_numerator: int = 1
     scale_denominator: int = 220
@@ -220,6 +221,7 @@ class FloorPlanConfig:
         output_dir: Optional[Path] = None,
         random_seed: Optional[int] = None,
         artifact_stem: Optional[str] = None,
+        render_png: bool = True,
     ) -> "FloorPlanConfig":
         if isinstance(env, dict):
             width = env["width"]
@@ -249,6 +251,7 @@ class FloorPlanConfig:
             env_type=resolved_env_type,
             output_dir=base_output,
             random_seed=random_seed,
+            render_png=render_png,
             **config_kwargs,
         )
 
@@ -400,7 +403,8 @@ class FloorPlanFactory:
 
     def generate(self) -> GeneratedFloorPlan:
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
-        self.config.png_dir.mkdir(parents=True, exist_ok=True)
+        if self.config.render_png:
+            self.config.png_dir.mkdir(parents=True, exist_ok=True)
 
         environment_rect = self._build_environment_rect()
         building_rect = self._sample_building_rect(environment_rect)
@@ -421,7 +425,9 @@ class FloorPlanFactory:
         elements = self._build_elements(boundaries)
 
         yaml_path = self._write_yaml(environment_rect, patios, elements)
-        png_paths = self._render_yaml(yaml_path)
+        png_paths: List[Path] = []
+        if self.config.render_png:
+            png_paths = self._render_yaml(yaml_path)
         parquet_path = self._write_parquet(elements)
 
         return GeneratedFloorPlan(
@@ -1249,7 +1255,7 @@ class FloorPlanFactory:
             "project": {
                 "dpi": self.config.dpi,
                 "pdf_file": None,
-                "png_dir": str(self.config.png_dir),
+                "png_dir": str(self.config.png_dir) if self.config.render_png else None,
             },
             "default_layout": layout,
             "reusable_elements": {
@@ -1321,11 +1327,13 @@ def generate_floor_plan_from_environment(
     output_dir: Optional[Path] = None,
     random_seed: Optional[int] = None,
     artifact_stem: Optional[str] = None,
+    render_png: bool = True,
 ) -> GeneratedFloorPlan:
     config = FloorPlanConfig.from_environment(
         environment,
         output_dir=output_dir,
         random_seed=random_seed,
         artifact_stem=artifact_stem,
+        render_png=render_png,
     )
     return FloorPlanFactory(config).generate()

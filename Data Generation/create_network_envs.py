@@ -14,27 +14,41 @@ NOTE: DONT FORGET to add a clutter area fraction data point (based on the amount
 
 """
 
+from __future__ import annotations
+
 import argparse
+import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-import matplotlib
-import matplotlib.pyplot as plt
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import pandas as pd
 from floor_plan_factory import GeneratedFloorPlan, generate_floor_plan_from_environment
 from network_scenario_factory import NetworkScenario
-from renovation.elements import Door, Polygon, Wall, Window
-matplotlib.use("Agg")  # headless / non-GUI
+
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
 
 PLOT_DPI = 300
 PLOT_LONG_EDGE_INCHES = 18.0
 PLOT_MIN_SHORT_EDGE_INCHES = 10.0
 
 
+def _get_pyplot():
+    import os
+
+    os.environ.setdefault("MPLBACKEND", "Agg")
+    os.environ.setdefault("MPLCONFIGDIR", "/tmp/codex_mpl")
+    os.environ.setdefault("XDG_CACHE_HOME", "/tmp")
+
+    import matplotlib.pyplot as plt
+
+    return plt
+
 def summarize_scenario(
     scenario_id: str,
     scenario: NetworkScenario,
     floor_plan_summary: Optional[Dict[str, Any]] = None,
+    timing_summary: Optional[Dict[str, float]] = None,
 ) -> None:
     scenario_dict = scenario.to_dict()
     print(scenario_id)
@@ -57,10 +71,14 @@ def summarize_scenario(
             "rooms:", floor_plan_summary["room_count"],
             "patios:", floor_plan_summary["patio_count"],
         )
+    if timing_summary is not None:
+        print(
+            "time_s:", round(timing_summary["total_seconds"], 2),
+        )
     print()
 
 
-def _setup_scenario_axis(ax: plt.Axes, scenario_id: str, scenario: NetworkScenario, *, title_suffix: Optional[str] = None) -> Dict[str, Any]:
+def _setup_scenario_axis(ax: Axes, scenario_id: str, scenario: NetworkScenario, *, title_suffix: Optional[str] = None) -> Dict[str, Any]:
     scenario_dict = scenario.to_dict()
     xmin, xmax = scenario_dict["environment"]["x_domain"]
     ymin, ymax = scenario_dict["environment"]["y_range"]
@@ -87,7 +105,8 @@ def _scenario_figure_size(scenario_dict: Dict[str, Any]) -> tuple[float, float]:
     return (short_edge, PLOT_LONG_EDGE_INCHES)
 
 
-def _draw_humans(ax: plt.Axes, humans: List[Dict[str, Any]]) -> None:
+def _draw_humans(ax: Axes, humans: List[Dict[str, Any]]) -> None:
+    plt = _get_pyplot()
     human_color = "tab:red"
     for human in humans:
         if human.get("radius") is not None:
@@ -118,7 +137,8 @@ def _draw_humans(ax: plt.Axes, humans: List[Dict[str, Any]]) -> None:
                 ax.add_patch(rect)
 
 
-def _draw_antennas(ax: plt.Axes, antennas: List[Dict[str, Any]]) -> None:
+def _draw_antennas(ax: Axes, antennas: List[Dict[str, Any]]) -> None:
+    plt = _get_pyplot()
     for idx, antenna in enumerate(antennas):
         x, y = antenna["position"]
         radius = antenna["coverage_radius"]
@@ -143,7 +163,9 @@ def _draw_antennas(ax: plt.Axes, antennas: List[Dict[str, Any]]) -> None:
         )
 
 
-def _draw_floor_plan(ax: plt.Axes, plan: GeneratedFloorPlan) -> None:
+def _draw_floor_plan(ax: Axes, plan: GeneratedFloorPlan) -> None:
+    from renovation.elements import Door, Polygon, Wall, Window
+
     for patio in plan.patios:
         Polygon(
             vertices=[
@@ -183,7 +205,7 @@ def _draw_floor_plan(ax: plt.Axes, plan: GeneratedFloorPlan) -> None:
             ).draw(ax)
 
 
-def _finalize_legend(ax: plt.Axes) -> None:
+def _finalize_legend(ax: Axes) -> None:
     handles, labels = ax.get_legend_handles_labels()
     uniq = dict(zip(labels, handles))
     if uniq:
@@ -196,6 +218,7 @@ def plot_scenario(scenario_id: str, scenario: NetworkScenario, out_dir: Path) ->
     Returns the relative path to the saved image, or None on failure.
     """
     try:
+        plt = _get_pyplot()
         scenario_dict = scenario.to_dict()
         fig, ax = plt.subplots(figsize=_scenario_figure_size(scenario_dict))
         scenario_dict = _setup_scenario_axis(ax, scenario_id, scenario, title_suffix="environment")
@@ -225,6 +248,7 @@ def plot_overlay_scenario(
     Render floor plan and environment entities on the same axis so both use the same scale.
     """
     try:
+        plt = _get_pyplot()
         scenario_dict = scenario.to_dict()
         fig, ax = plt.subplots(figsize=_scenario_figure_size(scenario_dict))
         scenario_dict = _setup_scenario_axis(ax, scenario_id, scenario, title_suffix="overlay")
@@ -250,6 +274,8 @@ def generate_floor_plan_artifacts(
     seed: Optional[int],
     scenario: NetworkScenario,
     out_dir: Path,
+    *,
+    render_png: bool,
 ) -> Dict[str, Any]:
     floor_plan_out_dir = out_dir / "floor_plans" / scenario_id
     plan = generate_floor_plan_from_environment(
@@ -257,6 +283,7 @@ def generate_floor_plan_artifacts(
         output_dir=floor_plan_out_dir,
         random_seed=seed,
         artifact_stem=f"{scenario_id}_floorplan",
+        render_png=render_png,
     )
 
     png_path = None
@@ -289,6 +316,7 @@ def scenario_to_rows(
     plot_path: Optional[str],
     floor_plan_summary: Optional[Dict[str, Any]] = None,
     overlay_plot_path: Optional[str] = None,
+    timing_summary: Optional[Dict[str, float]] = None,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Flatten a scenario into row dictionaries for each table."""
     scenario_dict = scenario.to_dict()
@@ -315,6 +343,11 @@ def scenario_to_rows(
         "floor_plan_room_count": floor_plan_summary["room_count"] if floor_plan_summary else None,
         "floor_plan_patio_count": floor_plan_summary["patio_count"] if floor_plan_summary else None,
         "floor_plan_element_count": floor_plan_summary["element_count"] if floor_plan_summary else None,
+        "scenario_generation_seconds": timing_summary["scenario_generation_seconds"] if timing_summary else None,
+        "environment_plot_seconds": timing_summary["environment_plot_seconds"] if timing_summary else None,
+        "floor_plan_seconds": timing_summary["floor_plan_seconds"] if timing_summary else None,
+        "overlay_plot_seconds": timing_summary["overlay_plot_seconds"] if timing_summary else None,
+        "total_seconds": timing_summary["total_seconds"] if timing_summary else None,
     }
 
     antenna_rows = []
@@ -389,6 +422,11 @@ def main() -> None:
         action="store_true",
         help="Render and save a PNG per scenario and store its path in summary.parquet.",
     )
+    parser.add_argument(
+        "--floorplan-plot",
+        action="store_true",
+        help="Render and save the standalone floor-plan PNG. If omitted, the YAML and parquet are still generated.",
+    )
     args = parser.parse_args()
 
     base_seed = args.seed
@@ -403,29 +441,52 @@ def main() -> None:
     floor_plan_element_rows: List[Dict[str, Any]] = []
 
     for iteration in range(1, args.count + 1):
+        scenario_start = time.perf_counter()
         # Vary the seed per scenario so each run is different even with a base seed
         scenario_seed = None if base_seed is None else base_seed + (iteration - 1)
         scenario_id = f"scenario_{iteration:04d}"
+
+        generation_start = time.perf_counter()
         network_scenario = NetworkScenario.generate_random(seed=scenario_seed)
+        scenario_generation_seconds = time.perf_counter() - generation_start
+
         if not args.no_save:
             plot_path = None
             overlay_plot_path = None
+            environment_plot_seconds = 0.0
+            floor_plan_seconds = 0.0
+            overlay_plot_seconds = 0.0
             if args.plot:
+                plot_start = time.perf_counter()
                 plot_path = plot_scenario(scenario_id, network_scenario, out_dir)
+                environment_plot_seconds = time.perf_counter() - plot_start
 
+            floor_plan_start = time.perf_counter()
             floor_plan_summary = generate_floor_plan_artifacts(
                 scenario_id,
                 scenario_seed,
                 network_scenario,
                 out_dir,
+                render_png=args.floorplan_plot,
             )
+            floor_plan_seconds = time.perf_counter() - floor_plan_start
             if args.plot:
+                overlay_start = time.perf_counter()
                 overlay_plot_path = plot_overlay_scenario(
                     scenario_id,
                     network_scenario,
                     floor_plan_summary["plan"],
                     out_dir,
                 )
+                overlay_plot_seconds = time.perf_counter() - overlay_start
+
+            timing_summary = {
+                "scenario_generation_seconds": scenario_generation_seconds,
+                "environment_plot_seconds": environment_plot_seconds,
+                "floor_plan_seconds": floor_plan_seconds,
+                "overlay_plot_seconds": overlay_plot_seconds,
+                "total_seconds": time.perf_counter() - scenario_start,
+            }
 
             rows = scenario_to_rows(
                 scenario_id,
@@ -434,14 +495,27 @@ def main() -> None:
                 plot_path,
                 floor_plan_summary=floor_plan_summary,
                 overlay_plot_path=overlay_plot_path,
+                timing_summary=timing_summary,
             )
-            summarize_scenario(scenario_id, network_scenario, floor_plan_summary=floor_plan_summary)
+            summarize_scenario(
+                scenario_id,
+                network_scenario,
+                floor_plan_summary=floor_plan_summary,
+                timing_summary=timing_summary,
+            )
             env_summary_rows.extend(rows["env_summary"])
             antenna_rows.extend(rows["antennas"])
             human_rows.extend(rows["humans"])
             floor_plan_element_rows.extend(floor_plan_summary["element_rows"])
         else:
-            summarize_scenario(scenario_id, network_scenario)
+            timing_summary = {
+                "scenario_generation_seconds": scenario_generation_seconds,
+                "environment_plot_seconds": 0.0,
+                "floor_plan_seconds": 0.0,
+                "overlay_plot_seconds": 0.0,
+                "total_seconds": time.perf_counter() - scenario_start,
+            }
+            summarize_scenario(scenario_id, network_scenario, timing_summary=timing_summary)
 
     if not args.no_save:
         pd.DataFrame(env_summary_rows).to_parquet(out_dir / "env_summary.parquet", index=False)
