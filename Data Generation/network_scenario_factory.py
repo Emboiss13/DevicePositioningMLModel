@@ -17,11 +17,14 @@ This module defines the core data structures and random generation logic for our
 
 from __future__ import annotations
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import random
 from antenna_factory import Antenna, AntennaFactory
 from environment_factory import Environment
 from human_factory import Human, HumanFactory
+
+if TYPE_CHECKING:
+    from floor_plan_factory import GeneratedFloorPlan
 
 
 @dataclass
@@ -49,27 +52,21 @@ class NetworkScenario:
         while antenna_factory.has_capacity():
             antennas.append(antenna_factory.create_antenna())
 
-        # Humans
-        human_factory = HumanFactory(env)
-        humans: List[Human] = []
-        failed_draws = 0
-        max_failed_draws = 50  # safety only
-
-        while human_factory.can_fit_any_human():
-            try:
-                human = human_factory.create_human()
-                humans.append(human)
-                failed_draws = 0  # reset after success
-            except RuntimeError:
-                failed_draws += 1
-                if failed_draws >= max_failed_draws:
-                    break
-
         return cls(
             environment=env,
             antennas=antennas,
-            humans=humans,
+            humans=[],
         )
+
+    def populate_humans_from_floor_plan(
+        self,
+        floor_plan: "GeneratedFloorPlan",
+        *,
+        seed: Optional[int] = None,
+    ) -> List[Human]:
+        human_factory = HumanFactory(self.environment, floor_plan, random_seed=seed)
+        self.humans = human_factory.generate_humans()
+        return self.humans
 
     def to_dict(self) -> Dict[str, Any]:
         """

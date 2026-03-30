@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import tempfile
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -406,6 +407,8 @@ def scenario_to_rows(
                 "length": human.get("length"),
                 "width": human.get("width"),
                 "area": human["area"],
+                "room_id": human.get("room_id"),
+                "room_type": human.get("room_type"),
             }
         )
 
@@ -480,10 +483,6 @@ def main() -> None:
             environment_plot_seconds = 0.0
             floor_plan_seconds = 0.0
             overlay_plot_seconds = 0.0
-            if args.plot:
-                plot_start = time.perf_counter()
-                plot_path = plot_scenario(scenario_id, network_scenario, out_dir)
-                environment_plot_seconds = time.perf_counter() - plot_start
 
             floor_plan_start = time.perf_counter()
             floor_plan_summary = generate_floor_plan_artifacts(
@@ -494,6 +493,14 @@ def main() -> None:
                 render_png=args.floorplan_plot,
             )
             floor_plan_seconds = time.perf_counter() - floor_plan_start
+            network_scenario.populate_humans_from_floor_plan(
+                floor_plan_summary["plan"],
+                seed=scenario_seed,
+            )
+            if args.plot:
+                plot_start = time.perf_counter()
+                plot_path = plot_scenario(scenario_id, network_scenario, out_dir)
+                environment_plot_seconds = time.perf_counter() - plot_start
             if args.plot:
                 overlay_start = time.perf_counter()
                 overlay_plot_path = plot_overlay_scenario(
@@ -532,14 +539,37 @@ def main() -> None:
             human_rows.extend(rows["humans"])
             floor_plan_element_rows.extend(floor_plan_summary["element_rows"])
         else:
+            floor_plan_start = time.perf_counter()
+            with tempfile.TemporaryDirectory(prefix=f"{scenario_id}_floorplan_") as temp_dir:
+                temp_plan = generate_floor_plan_from_environment(
+                    network_scenario.environment,
+                    output_dir=Path(temp_dir),
+                    random_seed=scenario_seed,
+                    artifact_stem=f"{scenario_id}_floorplan",
+                    render_png=False,
+                )
+                network_scenario.populate_humans_from_floor_plan(
+                    temp_plan,
+                    seed=scenario_seed,
+                )
+                floor_plan_summary = {
+                    "room_count": len(temp_plan.rooms),
+                    "patio_count": len(temp_plan.patios),
+                }
+            floor_plan_seconds = time.perf_counter() - floor_plan_start
             timing_summary = {
                 "scenario_generation_seconds": scenario_generation_seconds,
                 "environment_plot_seconds": 0.0,
-                "floor_plan_seconds": 0.0,
+                "floor_plan_seconds": floor_plan_seconds,
                 "overlay_plot_seconds": 0.0,
                 "total_seconds": time.perf_counter() - scenario_start,
             }
-            summarize_scenario(scenario_id, network_scenario, timing_summary=timing_summary)
+            summarize_scenario(
+                scenario_id,
+                network_scenario,
+                floor_plan_summary=floor_plan_summary,
+                timing_summary=timing_summary,
+            )
 
     if not args.no_save:
         pd.DataFrame(env_summary_rows).to_parquet(out_dir / "env_summary.parquet", index=False)
