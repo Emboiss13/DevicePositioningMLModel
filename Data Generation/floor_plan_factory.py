@@ -104,6 +104,7 @@ from environment_factory import Environment
 
 
 EPSILON = 1e-6
+METERS_PER_INCH = 0.0254
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "floor_planning" / "generated"
 
 
@@ -149,6 +150,14 @@ class Rect:
     def touches_building_side(self, building: "Rect", side: str) -> bool:
         return math.isclose(self.edge_coordinate(side), building.edge_coordinate(side), abs_tol=EPSILON)
 
+    def expanded(self, padding: float) -> "Rect":
+        return Rect(
+            x_min=self.x_min - padding,
+            y_min=self.y_min - padding,
+            x_max=self.x_max + padding,
+            y_max=self.y_max + padding,
+        )
+
 
 @dataclass(frozen=True)
 class FloorPlanConfig:
@@ -165,6 +174,8 @@ class FloorPlanConfig:
     dpi: int = 180
     scale_numerator: int = 1
     scale_denominator: int = 220
+    min_scale_denominator: int = 10
+    max_scale_denominator: int = 400
     building_coverage_range_indoor: Tuple[float, float] = (0.75, 0.95)
     building_coverage_range_outdoor: Tuple[float, float] = (0.25, 0.55)
     corridor_probability_indoor: float = 0.9
@@ -193,6 +204,10 @@ class FloorPlanConfig:
     opening_margin: float = 0.2
     opening_gap: float = 0.2
     layout_padding: float = 1.0
+    floor_plan_padding_ratio: float = 0.01
+    floor_plan_target_pixels_per_meter: float = 36.0
+    floor_plan_min_long_edge_pixels: int = 6000
+    floor_plan_max_long_edge_pixels: int = 10000
     patio_fill_color: str = "#d9d9d9"
     patio_line_width: float = 0.05
 
@@ -424,7 +439,7 @@ class FloorPlanFactory:
         self._assign_openings(boundaries, rooms)
         elements = self._build_elements(boundaries)
 
-        yaml_path = self._write_yaml(environment_rect, patios, elements)
+        yaml_path = self._write_yaml(environment_rect, building_rect, patios, elements)
         png_paths: List[Path] = []
         if self.config.render_png:
             png_paths = self._render_yaml(yaml_path)
@@ -1230,23 +1245,61 @@ class FloorPlanFactory:
             "color": self.config.patio_fill_color,
         }
 
+    def _floor_plan_view_rect(self, environment_rect: Rect, building_rect: Rect) -> Rect:
+        padding = max(
+            self.config.layout_padding,
+            self.config.floor_plan_padding_ratio * max(building_rect.width, building_rect.height),
+        )
+        view_rect = building_rect.expanded(padding)
+        return Rect(
+            x_min=max(view_rect.x_min, environment_rect.x_min - self.config.layout_padding),
+            y_min=max(view_rect.y_min, environment_rect.y_min - self.config.layout_padding),
+            x_max=min(view_rect.x_max, environment_rect.x_max + self.config.layout_padding),
+            y_max=min(view_rect.y_max, environment_rect.y_max + self.config.layout_padding),
+        )
+
+    def _resolve_scale_denominator(self, view_rect: Rect) -> int:
+        long_edge_meters = max(view_rect.width, view_rect.height)
+        target_long_edge_pixels = int(
+            max(
+                self.config.floor_plan_min_long_edge_pixels,
+                min(
+                    self.config.floor_plan_max_long_edge_pixels,
+                    math.ceil(long_edge_meters * self.config.floor_plan_target_pixels_per_meter),
+                ),
+            )
+        )
+        raw_denominator = (
+            long_edge_meters
+            * self.config.dpi
+            * self.config.scale_numerator
+            / (target_long_edge_pixels * METERS_PER_INCH)
+        )
+        return max(
+            self.config.min_scale_denominator,
+            min(self.config.max_scale_denominator, max(1, int(round(raw_denominator)))),
+        )
+
     def _write_yaml(
         self,
         environment_rect: Rect,
+        building_rect: Rect,
         patios: Sequence[Patio],
         elements: Sequence[FloorElement],
     ) -> Path:
+        view_rect = self._floor_plan_view_rect(environment_rect, building_rect)
+        scale_denominator = self._resolve_scale_denominator(view_rect)
         layout = {
             "bottom_left_corner": [
-                round(environment_rect.x_min - self.config.layout_padding, 3),
-                round(environment_rect.y_min - self.config.layout_padding, 3),
+                round(view_rect.x_min, 3),
+                round(view_rect.y_min, 3),
             ],
             "top_right_corner": [
-                round(environment_rect.x_max + self.config.layout_padding, 3),
-                round(environment_rect.y_max + self.config.layout_padding, 3),
+                round(view_rect.x_max, 3),
+                round(view_rect.y_max, 3),
             ],
             "scale_numerator": self.config.scale_numerator,
-            "scale_denominator": self.config.scale_denominator,
+            "scale_denominator": scale_denominator,
             "grid_major_step": None,
             "grid_minor_step": None,
         }

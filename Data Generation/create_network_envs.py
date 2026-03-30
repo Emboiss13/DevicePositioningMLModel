@@ -17,6 +17,7 @@ NOTE: DONT FORGET to add a clutter area fraction data point (based on the amount
 from __future__ import annotations
 
 import argparse
+import math
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -31,6 +32,9 @@ if TYPE_CHECKING:
 PLOT_DPI = 300
 PLOT_LONG_EDGE_INCHES = 18.0
 PLOT_MIN_SHORT_EDGE_INCHES = 10.0
+PLOT_TARGET_PIXELS_PER_METER = 20.0
+PLOT_MIN_LONG_EDGE_PIXELS = 5400
+PLOT_MAX_LONG_EDGE_PIXELS = 9000
 
 
 def _get_pyplot():
@@ -103,6 +107,26 @@ def _scenario_figure_size(scenario_dict: Dict[str, Any]) -> tuple[float, float]:
 
     short_edge = max(PLOT_MIN_SHORT_EDGE_INCHES, PLOT_LONG_EDGE_INCHES * (width / height))
     return (short_edge, PLOT_LONG_EDGE_INCHES)
+
+
+def _overlay_figure_size(scenario_dict: Dict[str, Any]) -> tuple[float, float]:
+    env = scenario_dict["environment"]
+    width = max(float(env["width"]), 1.0)
+    height = max(float(env["height"]), 1.0)
+    long_dim = max(width, height)
+    long_edge_pixels = int(
+        max(
+            PLOT_MIN_LONG_EDGE_PIXELS,
+            min(PLOT_MAX_LONG_EDGE_PIXELS, math.ceil(long_dim * PLOT_TARGET_PIXELS_PER_METER)),
+        )
+    )
+
+    if width >= height:
+        short_edge_pixels = max(1, int(round(long_edge_pixels * (height / width))))
+        return (long_edge_pixels / PLOT_DPI, short_edge_pixels / PLOT_DPI)
+
+    short_edge_pixels = max(1, int(round(long_edge_pixels * (width / height))))
+    return (short_edge_pixels / PLOT_DPI, long_edge_pixels / PLOT_DPI)
 
 
 def _draw_humans(ax: Axes, humans: List[Dict[str, Any]]) -> None:
@@ -250,7 +274,7 @@ def plot_overlay_scenario(
     try:
         plt = _get_pyplot()
         scenario_dict = scenario.to_dict()
-        fig, ax = plt.subplots(figsize=_scenario_figure_size(scenario_dict))
+        fig, ax = plt.subplots(figsize=_overlay_figure_size(scenario_dict))
         scenario_dict = _setup_scenario_axis(ax, scenario_id, scenario, title_suffix="overlay")
         _draw_floor_plan(ax, floor_plan)
         _draw_humans(ax, scenario_dict["humans"])
