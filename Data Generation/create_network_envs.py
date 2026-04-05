@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 import pandas as pd
 from floor_plan_factory import GeneratedFloorPlan, generate_floor_plan_from_environment
+from link_factory import build_link_rows
 from network_scenario_factory import NetworkScenario
 
 if TYPE_CHECKING:
@@ -436,6 +437,28 @@ def generate_target_artifacts(
     }
 
 
+def generate_link_artifacts(
+    scenario_id: str,
+    seed: Optional[int],
+    scenario: NetworkScenario,
+    floor_plan_summary: Dict[str, Any],
+) -> Dict[str, Any]:
+    link_rows = build_link_rows(
+        antennas=scenario.antennas,
+        targets=scenario.targets,
+        floor_plan=floor_plan_summary["plan"],
+        humans=scenario.humans,
+        scenario_id=scenario_id,
+    )
+    for row in link_rows:
+        row["seed"] = seed
+
+    return {
+        "link_count": len(link_rows),
+        "link_rows": link_rows,
+    }
+
+
 def scenario_to_rows(
     scenario_id: str,
     seed: Optional[int],
@@ -443,6 +466,7 @@ def scenario_to_rows(
     plot_path: Optional[str],
     floor_plan_summary: Optional[Dict[str, Any]] = None,
     target_summary: Optional[Dict[str, Any]] = None,
+    link_summary: Optional[Dict[str, Any]] = None,
     overlay_plot_path: Optional[str] = None,
     target_plot_path: Optional[str] = None,
     timing_summary: Optional[Dict[str, float]] = None,
@@ -481,6 +505,7 @@ def scenario_to_rows(
         "target_requested_max_cell_size": target_summary["requested_max_cell_size"] if target_summary else None,
         "target_cell_width": target_summary["cell_width"] if target_summary else None,
         "target_cell_height": target_summary["cell_height"] if target_summary else None,
+        "link_count": link_summary["link_count"] if link_summary else None,
         "scenario_generation_seconds": timing_summary["scenario_generation_seconds"] if timing_summary else None,
         "environment_plot_seconds": timing_summary["environment_plot_seconds"] if timing_summary else None,
         "floor_plan_seconds": timing_summary["floor_plan_seconds"] if timing_summary else None,
@@ -585,6 +610,7 @@ def main() -> None:
     human_rows: List[Dict[str, Any]] = []
     target_rows: List[Dict[str, Any]] = []
     grid_cell_rows: List[Dict[str, Any]] = []
+    link_rows: List[Dict[str, Any]] = []
     floor_plan_element_rows: List[Dict[str, Any]] = []
 
     for iteration in range(1, args.count + 1):
@@ -619,6 +645,12 @@ def main() -> None:
                 seed=scenario_seed,
             )
             target_summary = generate_target_artifacts(
+                scenario_id,
+                scenario_seed,
+                network_scenario,
+                floor_plan_summary,
+            )
+            link_summary = generate_link_artifacts(
                 scenario_id,
                 scenario_seed,
                 network_scenario,
@@ -661,6 +693,7 @@ def main() -> None:
                 plot_path,
                 floor_plan_summary=floor_plan_summary,
                 target_summary=target_summary,
+                link_summary=link_summary,
                 overlay_plot_path=overlay_plot_path,
                 target_plot_path=target_plot_path,
                 timing_summary=timing_summary,
@@ -677,6 +710,7 @@ def main() -> None:
             human_rows.extend(rows["humans"])
             target_rows.extend(target_summary["target_rows"])
             grid_cell_rows.extend(target_summary["grid_cell_rows"])
+            link_rows.extend(link_summary["link_rows"])
             floor_plan_element_rows.extend(floor_plan_summary["element_rows"])
         else:
             floor_plan_start = time.perf_counter()
@@ -723,6 +757,7 @@ def main() -> None:
         pd.DataFrame(human_rows).to_parquet(out_dir / "humans.parquet", index=False)
         pd.DataFrame(target_rows).to_parquet(out_dir / "targets.parquet", index=False)
         pd.DataFrame(grid_cell_rows).to_parquet(out_dir / "grid_cells.parquet", index=False)
+        pd.DataFrame(link_rows).to_parquet(out_dir / "links.parquet", index=False)
         pd.DataFrame(floor_plan_element_rows).to_parquet(out_dir / "floor_plan_elements.parquet", index=False)
 
 

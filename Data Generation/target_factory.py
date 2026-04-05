@@ -7,6 +7,7 @@ target at the center of every valid grid cell.
 
 Target rules:
 - The target can be anywhere in the environment.
+- The target (for hardware pusposes) is a ClearCom belpack
 - Cells are generated across the full environment extent.
 - A cell is valid if its center is not inside a wall footprint.
 - Rooms, corridors, patios, and exterior free space are all valid target areas.

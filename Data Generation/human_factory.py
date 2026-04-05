@@ -20,12 +20,10 @@ How this links to the other modules:
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 import math
 import random
 from typing import Dict, List, Optional, Tuple
-
 from environment_factory import Environment
 from floor_plan_factory import GeneratedFloorPlan, Rect, Room
 
