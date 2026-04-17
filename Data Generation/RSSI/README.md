@@ -42,16 +42,12 @@ We will only use outdoor, Indoor LOS and Indoor NLOS environment types.
 
 | Environment Type | Description | Path Loss Exponent $n$ |
 |------------------|------------|------------------------|
-| Free Space / Open Outdoor | Minimal obstruction, near line-of-sight | 2.0 – 2.2 |
 | Outdoor (Urban / Light Clutter) | Buildings, foliage | 2.7 – 3.5 |
-| Indoor LOS | Open indoor areas (e.g. halls, warehouses) | 2.0 – 3.0 |
-| Indoor NLOS | Multiple walls, partitions | 3.0 – 6.0 |
-| Heavily Obstructed Indoor | Dense materials (concrete, metal) | 4.0 – 6.0 |
+| Indoor LOS | Open indoor areas (e.g. halls, warehouses) | 1.6 – 1.8 |
+| Indoor NLOS | Multiple walls, partitions | 4.0 – 6.0 |
 
 > **Reference:**  
-> Srinivasan, S.; Haenggi, M., *Path loss exponent estimation in large wireless networks*,  
-> Information Theory and Applications Workshop, Feb 2009.  
-> https://arxiv.org/pdf/0802.0351v1.pdf
+> https://ieeexplore.ieee.org/document/5044933 
 
 <br>
 
