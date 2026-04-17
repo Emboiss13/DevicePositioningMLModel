@@ -19,8 +19,6 @@ and we will use this dict to generate the obstacles in the available free space.
 
 NOTE: this is the best idea I have come up with at the moment, there might be a more optimal way of doing this.
 
-
-
 INPUTS & OUTPUTS
 --------------  
 

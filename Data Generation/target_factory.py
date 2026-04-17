@@ -21,11 +21,9 @@ The grid uses a finer maximum spacing indoors and a coarser spacing outdoors:
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 import math
 from typing import Iterable, List, Optional, Tuple
-
 from environment_factory import Environment
 from floor_plan_factory import EPSILON, FloorElement, GeneratedFloorPlan, Patio, Rect, Room
 

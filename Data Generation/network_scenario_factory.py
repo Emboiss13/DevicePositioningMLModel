@@ -14,7 +14,6 @@ This module defines the core data structures and random generation logic for our
 
 """
 
-
 from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Dict, List, Optional

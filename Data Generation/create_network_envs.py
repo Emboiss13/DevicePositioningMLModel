@@ -16,7 +16,6 @@ NOTE: DONT FORGET to add a clutter area fraction data point (based on the amount
 """
 
 from __future__ import annotations
-
 import argparse
 import math
 import tempfile

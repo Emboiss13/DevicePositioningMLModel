@@ -16,13 +16,11 @@ these link rows in their own modules.
 """
 
 from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import Enum
 import json
 import math
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple
-
 from antenna_factory import Antenna
 from floor_plan_factory import EPSILON, GeneratedFloorPlan
 from human_factory import Human
