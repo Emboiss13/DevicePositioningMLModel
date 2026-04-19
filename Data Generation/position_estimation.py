@@ -23,6 +23,8 @@ python3 "Data Generation/position_estimation.py" --data-dir "generated_network_s
 python3 "Data Generation/position_estimation.py" \
   --data-dir "Data Generation/generated_network_scenarios" \
   --output "Data Generation/generated_network_scenarios/position_estimates.parquet"
+python3 "Data Generation/position_estimation.py" \
+  --data-dir "Data Generation/generated_network_scenarios"
 
 @author: Giuliana Emberson
 @date: 7th of May 2026

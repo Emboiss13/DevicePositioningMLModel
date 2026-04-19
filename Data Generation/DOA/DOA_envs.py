@@ -22,6 +22,8 @@ python3 "Data Generation/DOA/DOA_envs.py" --data-dir "generated_network_scenario
 python3 "Data Generation/DOA/DOA_envs.py" \
   --data-dir "Data Generation/generated_network_scenarios" \
   --carrier-frequency-hz 5500000000.0
+python3 "Data Generation/DOA/DOA_envs.py" \
+  --data-dir "Data Generation/generated_network_scenarios" --seed 7
 
 @author: Giuliana Emberson
 @date: 7th of May 2026
