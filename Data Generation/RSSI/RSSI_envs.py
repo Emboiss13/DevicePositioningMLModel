@@ -22,6 +22,10 @@ python3 "Data Generation/RSSI/RSSI_envs.py" \
   --data-dir "Data Generation/generated_network_scenarios" \
   --tx-power-dbm 20.0 \
   --tx-gain-dbi 3.0
+  
+@author: Giuliana Emberson
+@date: 7th of May 2026
+
 """
 
 from __future__ import annotations
@@ -187,6 +191,7 @@ def build_rssi_base_table(
     - tx_power_dbm
     - tx_gain_dbi
     - rx_gain_dbi
+    - reference_distance_m
     - initial_signal_strength_dbm
     - wall_attenuation_db
     - human_attenuation_db
@@ -222,6 +227,7 @@ def build_rssi_base_table(
     rssi_df["tx_power_dbm"] = float(tx_power_dbm)
     rssi_df["tx_gain_dbi"] = float(tx_gain_dbi)
     rssi_df["rx_gain_dbi"] = float(rx_gain_dbi)
+    rssi_df["reference_distance_m"] = float(reference_distance_m)
 
     rssi_df["initial_signal_strength_dbm"] = _reference_rssi_dbm_from_freq(
         freq_mhz=rssi_df["freq_mhz"],
@@ -280,6 +286,7 @@ def build_rssi_base_table(
         "tx_power_dbm",
         "tx_gain_dbi",
         "rx_gain_dbi",
+        "reference_distance_m",
         "initial_signal_strength_dbm",
         "wall_attenuation_db",
         "human_attenuation_db",
