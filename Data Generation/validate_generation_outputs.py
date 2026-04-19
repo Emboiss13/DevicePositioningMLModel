@@ -14,6 +14,8 @@ Checks:
 
 Usage:
 python3 "Data Generation/validate_generation_outputs.py" --data-dir "generated_network_scenarios"
+python3 "Data Generation/validate_generation_outputs.py" \
+  --data-dir "Data Generation/generated_network_scenarios"
 
 @author: Giuliana Emberson
 @date: 7th of May 2026
@@ -201,11 +203,19 @@ def validate_generation_outputs(data_dir: Union[str, Path]) -> None:
         "links_rssi.parquet",
     )
     _check_no_missing(tdoa_df, ["observed_tdoa_ns"], "links_tdoa.parquet")
-    _check_no_missing(
-        doa_df,
-        ["observed_doa_deg", "observed_bearing_deg"],
-        "links_doa.parquet",
-    )
+    if "is_doa_valid" in doa_df.columns:
+        valid_doa_df = doa_df[doa_df["is_doa_valid"].fillna(False).astype(bool)]
+        _check_no_missing(
+            valid_doa_df,
+            ["observed_doa_deg", "observed_bearing_deg"],
+            "links_doa.parquet valid DOA rows",
+        )
+    else:
+        _check_no_missing(
+            doa_df,
+            ["observed_doa_deg", "observed_bearing_deg"],
+            "links_doa.parquet",
+        )
 
     _check_unique_targets(estimates_df, "position_estimates.parquet")
     _check_unique_targets(ml_dataset_df, "ml_dataset.parquet")

@@ -22,6 +22,8 @@ python3 "Data Generation/RSSI/RSSI_envs.py" \
   --data-dir "Data Generation/generated_network_scenarios" \
   --tx-power-dbm 20.0 \
   --tx-gain-dbi 3.0
+python3 "Data Generation/RSSI/RSSI_envs.py" \
+  --data-dir "Data Generation/generated_network_scenarios" --seed 7
   
 @author: Giuliana Emberson
 @date: 7th of May 2026

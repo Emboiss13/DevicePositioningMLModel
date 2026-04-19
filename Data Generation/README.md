@@ -7,7 +7,7 @@
 
 ## Pipeline
 
-The data-generation stage is split into five steps:
+The data-generation stage is split into six steps:
 
 1. Generate network scenarios, floor plans, targets, and shared antenna-target
    links:
@@ -44,6 +44,12 @@ python3 "Data Generation/create_ml_dataset.py" --data-dir "generated_network_sce
 python3 "Data Generation/validate_generation_outputs.py" --data-dir "generated_network_scenarios"
 ```
 
+6. Evaluate RSSI, TDOA, DOA/AOA, and optional ML positioning performance:
+
+```bash
+python3 "Data Generation/evaluate_positioning_performance.py" --data-dir "generated_network_scenarios"
+```
+
 ## Output Tables
 
 - `env_summary.parquet`: one row per scenario.
@@ -60,6 +66,36 @@ python3 "Data Generation/validate_generation_outputs.py" --data-dir "generated_n
 - `position_estimates.parquet`: one row per target with conventional RSSI,
   TDOA, and DOA/AOA `(x, y)` estimates and error metrics.
 - `ml_dataset.parquet`: one labelled row per target for the ML pipeline.
+- `evaluation/`: CSV summaries and plots comparing positioning error across
+  RSSI, TDOA, DOA/AOA, and optional ML predictions.
+
+## Performance Evaluation
+
+`evaluate_positioning_performance.py` reports 2D localisation error in metres:
+
+```text
+error_m = sqrt((estimated_x - target_x)^2 + (estimated_y - target_y)^2)
+```
+
+By default, the evaluator compares `rssi_error_m`, `tdoa_error_m`, and
+`doa_error_m`. Once ML predictions are available, pass a CSV or parquet file
+containing `scenario_id`, `target_id`, and either `ml_est_x`/`ml_est_y` or
+`ml_error_m`:
+
+```bash
+python3 "Data Generation/evaluate_positioning_performance.py" \
+  --data-dir "generated_network_scenarios" \
+  --predictions-path "generated_network_scenarios/ml_predictions.parquet"
+```
+
+The evaluator writes:
+
+- `method_performance_summary.csv`
+- `condition_performance_summary.csv`
+- `method_error_distribution.png`
+- `method_error_cdf.png`
+- `ml_vs_baseline_improvement.csv` when ML predictions are supplied.
+- `paired_method_comparisons.csv` when ML predictions are supplied.
 
 ## Attenuation Scope
 

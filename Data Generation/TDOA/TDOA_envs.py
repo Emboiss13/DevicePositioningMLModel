@@ -21,6 +21,8 @@ python3 "Data Generation/TDOA/TDOA_envs.py" --data-dir "generated_network_scenar
 python3 "Data Generation/TDOA/TDOA_envs.py" \
   --data-dir "Data Generation/generated_network_scenarios" \
   --propagation-speed-m-per-s 299792458.0
+python3 "Data Generation/TDOA/TDOA_envs.py" \
+  --data-dir "Data Generation/generated_network_scenarios" --seed 7
 
 @author: Giuliana Emberson
 @date: 7th of May 2026
