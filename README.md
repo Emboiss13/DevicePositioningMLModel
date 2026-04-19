@@ -11,14 +11,15 @@ This project aims to address the limitations of GPS by developing a machine lear
 signals and instead leverages communication between devices within the same 5 GHz
 localised network. To achieve this, the project will evaluate and compare signal-based,
 direction-based and time-based indoor positioning methods [2], under emulated
-conditions. A key assumption in this project is that multi-path interference will not
-significantly affect localisation performance. Therefore, while multi-path propagation
-will be considered, the system will focus only on the strongest received signal when
-estimating position. Moreover, the specific problem addressed in this project is
-whether a machine learning model can outperform conventional indoor positioning
-methods by learning patterns and compensating for environmental conditions that
-arise in both indoor and outdoor propagation environments, such as noise,
-interference, non-line-of-sight (NLOS), and line-of-sight (LOS) [1].
+conditions. RSSI, TDOA, and DOA/AOA measurements are generated under indoor
+and outdoor scenarios with LOS/NLOS link states, obstacle interactions, and
+measurement noise. Multipath propagation is not explicitly simulated in this
+implementation; instead, obstruction effects are approximated through LOS/NLOS
+classification, blocker counts, environment-dependent noise, and optional RSSI
+obstacle attenuation. The specific problem addressed in this project is whether a
+machine learning model can outperform or refine conventional indoor positioning
+methods by learning patterns caused by environmental conditions in both indoor
+and outdoor propagation environments [1].
 
 This problem provides a sufficient challenge for an undergraduate dissertation due to the mathematical
 complexity of using device positioning methods and the intricacies of generating
@@ -54,8 +55,9 @@ network environments will be emulated by randomly generating scenario
 parameters and constraints. Each environment scenario will include all data
 required to perform positioning estimations. This includes generating the exact
 (ground-truth) position of the target device and other devices in the network,
-obstacles, material attenuation coefficients, noise, interference, signal strength
-measurements, etc.
+floor-plan obstacles, valid target locations, antenna-target distances, LOS/NLOS
+link states, obstacle blocker counts, and the scenario context required for
+method-specific RSSI, TDOA, and DOA/AOA measurement generation.
 
 - **Risk**: Failing to represent realistic network conditions or introducing bias by lacking enough variation in the generated data.
 
@@ -70,14 +72,15 @@ and relevance [1].
 The generated network environments will be
 used to produce multiple position estimates. For each network scenario, the
 position of the same target device will be calculated using three indoor
-positioning methods: Received Signal Strength Indicators (RSSI), Time of
-Arrival (TOA), and Angle of Arrival (AOA).
+positioning methods: Received Signal Strength Indicators (RSSI), Time Difference
+of Arrival (TDOA), and Direction/Angle of Arrival (DOA/AOA).
 
 - **Risk**: Emulated environments may oversimplify network conditions
 affecting the performance of some positioning methods more than
 others.
 - **Mitigation**: Attenuation, noise, and LOS/NLOS conditions will be
-incorporated to improve dataset realism [1].
+approximated through blocker-aware RSSI attenuation, measurement noise, and
+LOS/NLOS link classification to improve dataset realism [1].
 
 <br>
 
