@@ -8,7 +8,12 @@ python3 create_network_envs.py --count 10 --seed 2
 python3 create_network_envs.py --count 1 --output-dir generated_network_scenarios --plot
 python3 'Data Generation/create_network_envs.py' --count 1 --seed 7 --output-dir '/tmp/generated_network_scenarios_target_plot' --target-plot
 
-NOTE: DONT FORGET to add a clutter area fraction data point (based on the amount of clutter in a room)
+python3 "Data Generation/create_network_envs.py" \
+  --count 1 \
+  --seed 7 \
+  --output-dir "Data Generation/generated_network_scenarios" \
+  --plot \
+  --floorplan-plot
 
 @author: Giuliana Emberson
 @date: 7th of May 2026

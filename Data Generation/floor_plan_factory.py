@@ -48,7 +48,7 @@ INPUTS:
 
             
 OUTPUTS:
-    - A png image including the 2D representation of the floorplan.
+    - Optionally, a png image including the 2D representation of the floorplan.
     - A parquet file including the coordinates of the occupied and unoccupied areas of the environment.
         - Classify areas based on obstacle types: walls, doors, and windows. (this is just an idea not sure if its necessary or useful)
         - After we have defined the free space available we can generate humans and other obstacles in the environment.
@@ -168,7 +168,7 @@ class FloorPlanConfig:
     parquet_filename: str = "floor_plan_elements.parquet"
     png_dirname: str = "png"
     png_filename: str = "floor_plan.png"
-    render_png: bool = True
+    render_png: bool = False
     dpi: int = 180
     scale_numerator: int = 1
     scale_denominator: int = 220
@@ -234,7 +234,7 @@ class FloorPlanConfig:
         output_dir: Optional[Path] = None,
         random_seed: Optional[int] = None,
         artifact_stem: Optional[str] = None,
-        render_png: bool = True,
+        render_png: bool = False,
     ) -> "FloorPlanConfig":
         if isinstance(env, dict):
             width = env["width"]
@@ -1378,7 +1378,7 @@ def generate_floor_plan_from_environment(
     output_dir: Optional[Path] = None,
     random_seed: Optional[int] = None,
     artifact_stem: Optional[str] = None,
-    render_png: bool = True,
+    render_png: bool = False,
 ) -> GeneratedFloorPlan:
     config = FloorPlanConfig.from_environment(
         environment,
