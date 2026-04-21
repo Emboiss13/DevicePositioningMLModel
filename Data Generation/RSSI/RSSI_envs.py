@@ -24,6 +24,8 @@ python3 "Data Generation/RSSI/RSSI_envs.py" \
   --tx-gain-dbi 3.0
 python3 "Data Generation/RSSI/RSSI_envs.py" \
   --data-dir "Data Generation/generated_network_scenarios" --seed 7
+
+python3 "Data Generation/RSSI/RSSI_envs.py" --data-dir "Data Generation/generated_network_scenarios_with_plots" --seed 13
   
 @author: Giuliana Emberson
 @date: 7th of May 2026
@@ -34,6 +36,7 @@ from __future__ import annotations
 import argparse
 import math
 import random
+import warnings
 from pathlib import Path
 from typing import Union
 import numpy as np
@@ -219,9 +222,15 @@ def build_rssi_base_table(
         validate="many_to_one",
     )
 
-    if (rssi_df["distance_m"] <= 0).any():
-        bad_count = int((rssi_df["distance_m"] <= 0).sum())
-        raise ValueError(f"distance_m must be > 0 for RSSI calculations. Found {bad_count} invalid rows.")
+    zero_distance_mask = rssi_df["distance_m"] <= 0
+    if zero_distance_mask.any():
+        bad_count = int(zero_distance_mask.sum())
+        warnings.warn(
+            f"Dropping {bad_count} link row(s) where distance_m <= 0 "
+            "(target at same position as antenna). RSSI is undefined at zero distance.",
+            stacklevel=2,
+        )
+        rssi_df = rssi_df[~zero_distance_mask].copy()
 
     np_rng = np.random.default_rng(seed)
 
