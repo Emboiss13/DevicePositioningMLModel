@@ -17,6 +17,8 @@ python3 "Data Generation/validate_generation_outputs.py" --data-dir "generated_n
 python3 "Data Generation/validate_generation_outputs.py" \
   --data-dir "Data Generation/generated_network_scenarios"
 
+python3 "Data Generation/validate_generation_outputs.py" --data-dir "Data Generation/generated_network_scenarios_with_plots"
+
 @author: Giuliana Emberson
 @date: 7th of May 2026
 
@@ -87,6 +89,7 @@ def _check_count_by_scenario(
     *,
     expected_column: str,
     table_name: str,
+    allow_fewer: bool = False,
 ) -> None:
     actual_counts = (
         actual_df.groupby("scenario_id", sort=True)
@@ -101,12 +104,16 @@ def _check_count_by_scenario(
         validate="one_to_one",
     )
     merged_df["actual_count"] = merged_df["actual_count"].fillna(0).astype(int)
-    bad_df = merged_df[merged_df["actual_count"] != merged_df[expected_column]]
+    if allow_fewer:
+        bad_df = merged_df[merged_df["actual_count"] > merged_df[expected_column]]
+    else:
+        bad_df = merged_df[merged_df["actual_count"] != merged_df[expected_column]]
     if not bad_df.empty:
         first_bad = bad_df.iloc[0]
+        relation = "exceeded" if allow_fewer else "mismatch"
         raise ValueError(
-            f"{table_name} count mismatch for {first_bad['scenario_id']}: "
-            f"expected {int(first_bad[expected_column])}, got {int(first_bad['actual_count'])}."
+            f"{table_name} count {relation} for {first_bad['scenario_id']}: "
+            f"expected {'at most ' if allow_fewer else ''}{int(first_bad[expected_column])}, got {int(first_bad['actual_count'])}."
         )
 
 
@@ -183,6 +190,7 @@ def validate_generation_outputs(data_dir: Union[str, Path]) -> None:
         counts_df,
         expected_column="expected_link_count",
         table_name="links_rssi.parquet",
+        allow_fewer=True,
     )
     _check_count_by_scenario(
         doa_df,

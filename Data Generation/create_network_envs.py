@@ -15,6 +15,8 @@ python3 "Data Generation/create_network_envs.py" \
   --plot \
   --floorplan-plot
 
+python3 "Data Generation/create_network_envs.py"  --count 100 --seed 13 --output-dir "Data Generation/generated_network_scenarios_with_plots" --plot --floorplan-plot
+
 @author: Giuliana Emberson
 @date: 7th of May 2026
 

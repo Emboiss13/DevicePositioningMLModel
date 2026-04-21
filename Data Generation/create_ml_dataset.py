@@ -29,6 +29,8 @@ python3 "Data Generation/create_ml_dataset.py" \
 python3 "Data Generation/create_ml_dataset.py" \
   --data-dir "Data Generation/generated_network_scenarios"
 
+python3 "Data Generation/create_ml_dataset.py" --data-dir "Data Generation/generated_network_scenarios_with_plots"
+
 @author: Giuliana Emberson
 @date: 7th of May 2026
 
