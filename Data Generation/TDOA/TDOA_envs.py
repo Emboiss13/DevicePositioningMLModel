@@ -24,6 +24,8 @@ python3 "Data Generation/TDOA/TDOA_envs.py" \
 python3 "Data Generation/TDOA/TDOA_envs.py" \
   --data-dir "Data Generation/generated_network_scenarios" --seed 7
 
+python3 "Data Generation/TDOA/TDOA_envs.py" --data-dir "Data Generation/generated_network_scenarios_with_plots" --seed 13
+
 @author: Giuliana Emberson
 @date: 7th of May 2026
 
